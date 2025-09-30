@@ -1,4 +1,5 @@
-import random
+import numpy as np
+
 
 class Perceptron:
     def __init__(self, n_inputs, activation, alpha=0.1, max_iter=100, training_algorithm=None):
@@ -7,9 +8,10 @@ class Perceptron:
         self.alpha = alpha
         self.max_iter = max_iter
         self.training_algorithm = training_algorithm
-        self.weights = [random.uniform(-0.05, 0.05) for _ in range(n_inputs + 1)]
-        self.best_weights = list(self.weights)
+        self.weights = np.random.uniform(-0.05, 0.05, n_inputs + 1)
+        self.best_weights = self.weights.copy()
         self.min_error = float("inf")
+        self.error_threshold = 0.0001
 
     def predict(self, x):
         """
@@ -27,4 +29,4 @@ class Perceptron:
         """
         if self.training_algorithm is None:
             raise ValueError("Debe especificarse un algoritmo de entrenamiento.")
-        return self.training_algorithm(self, x, y)
+        return self.training_algorithm(self, x, y, self.error_threshold)
