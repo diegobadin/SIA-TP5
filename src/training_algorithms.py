@@ -1,7 +1,6 @@
-# --- RULE FOR SIMPLE PERCEPTRON  ---
 from utils.train_base import train_base
 
-
+# --- RULE FOR SIMPLE PERCEPTRON  ---
 def simple_perceptron_rule(weights, linear_error, x_i, alpha, n_features):
     """
     Updates weights only if a classification error occurs (error != 0).

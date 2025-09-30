@@ -10,4 +10,7 @@ def step_function(x):
         return -1
 
 def linear_function(x):
+    """
+        Linear activation function. Identity functions.
+    """
     return x
