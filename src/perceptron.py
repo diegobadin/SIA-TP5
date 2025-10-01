@@ -2,7 +2,8 @@ import numpy as np
 
 
 class Perceptron:
-    def __init__(self, n_inputs, activation, alpha=0.1, max_iter=100, training_algorithm=None, activation_derivative=None):
+    def __init__(self, n_inputs, activation, alpha=0.1, max_iter=100, training_algorithm=None,
+                 activation_derivative=None, mode="online", batch_size=16, shuffle=True):
         self.n_inputs = n_inputs
         self.activation = activation
         self.activation_derivative = activation_derivative
@@ -13,6 +14,9 @@ class Perceptron:
         self.best_weights = self.weights.copy()
         self.min_error = float("inf")
         self.error_threshold = 0.0001
+        self.mode = mode
+        self.batch_size = batch_size
+        self.shuffle = shuffle
 
     def predict(self, x):
         """
@@ -30,4 +34,5 @@ class Perceptron:
         """
         if self.training_algorithm is None:
             raise ValueError("Debe especificarse un algoritmo de entrenamiento.")
-        return self.training_algorithm(self, x, y, self.error_threshold)
+        return self.training_algorithm(self, x, y, self.error_threshold,
+                                       mode=self.mode, batch_size=self.batch_size, shuffle=self.shuffle)

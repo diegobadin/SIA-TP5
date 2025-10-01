@@ -19,7 +19,7 @@ def simple_convergence_criterion(error_count):
     return error_count == 0
 
 
-def simple_perceptron(perceptron, x, y, min_error_threshold=None):
+def simple_perceptron(perceptron, x, y, min_error_threshold=None, mode="online", batch_size=16, shuffle=True):
     """
     Trains the Perceptron for Classification using the Perceptron Learning Rule.
     """
@@ -32,7 +32,10 @@ def simple_perceptron(perceptron, x, y, min_error_threshold=None):
         perceptron, x, y,
         simple_perceptron_rule,
         convergence_criterion,
-        convergence_threshold=min_error_threshold  # Passed as None, but kept for signature consistency
+        convergence_threshold=min_error_threshold,  # Passed as None, but kept for signature consistency
+        mode=mode,
+        batch_size=batch_size,
+        shuffle=shuffle
     )
 
 
@@ -52,7 +55,8 @@ def linear_convergence_criterion(sse, min_error_threshold):
     return sse < min_error_threshold
 
 
-def linear_perceptron(perceptron, x, y, min_error_threshold):
+def linear_perceptron(perceptron, x, y, min_error_threshold,
+                      mode="online", batch_size=16, shuffle=True):
     """
     Trains the Perceptron for Regression using the Delta Rule (Linear Perceptron).
     """
@@ -65,11 +69,15 @@ def linear_perceptron(perceptron, x, y, min_error_threshold):
         perceptron, x, y,
         linear_perceptron_rule,
         convergence_criterion,
-        convergence_threshold=min_error_threshold
+        convergence_threshold=min_error_threshold,
+        mode=mode,
+        batch_size=batch_size,
+        shuffle=shuffle
+
     )
 
 
-def nonlinear_perceptron(perceptron, x, y, min_error_threshold):
+def nonlinear_perceptron(perceptron, x, y, min_error_threshold, mode="online", batch_size=16, shuffle=True):
     """
     Trains the Perceptron with a sigmoid-like activation using gradient descent:
     Δw = α (y - o) θ'(h) x, minimizing SSE. Stops when SSE < threshold.
@@ -99,5 +107,8 @@ def nonlinear_perceptron(perceptron, x, y, min_error_threshold):
         perceptron, x, y,
         update_rule_with_derivative,
         convergence_criterion,
-        convergence_threshold=min_error_threshold
+        convergence_threshold=min_error_threshold,
+        mode=mode,
+        batch_size=batch_size,
+        shuffle=shuffle
     )

@@ -1,6 +1,7 @@
 from src.perceptron import Perceptron
 from src.training_algorithms import simple_perceptron
 from utils.activations import step_function
+import matplotlib.pyplot as plt
 
 
 def logical_gate(name, x_features, y_labels):
@@ -18,7 +19,10 @@ def logical_gate(name, x_features, y_labels):
         activation=step_function,
         alpha=0.1,
         max_iter=100,
-        training_algorithm=simple_perceptron
+        training_algorithm=simple_perceptron,
+        mode="online",  # If mode is online, batch_size is ignored
+        batch_size=8,
+        shuffle=True
     )
 
     # 3. Train
@@ -47,6 +51,12 @@ def logical_gate(name, x_features, y_labels):
 
     print(f"\nFinal Accuracy: {correct_count}/{len(y_labels)}")
 
+    # Graph the training error over epochs
+    plt.plot(p.error_history)
+    plt.xlabel("Epoch")
+    plt.ylabel("Error")
+    plt.title(f"Training Error ({p.mode})")
+    plt.show()
 
 def run():
     x_base = [[-1, 1], [1, -1], [-1, -1], [1, 1]]

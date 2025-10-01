@@ -10,6 +10,7 @@ from utils.activations import (
     scaled_tanh_function_factory,
 )
 from utils.parse_csv_data import parse_csv_data
+import matplotlib.pyplot as plt
 
 
 def run_linear_perceptron_regression(csv_file_path: str):
@@ -28,8 +29,14 @@ def run_linear_perceptron_regression(csv_file_path: str):
     # 2. PERCEPTRON INITIALIZATION
     # Instantiate the Perceptron model with hyperparameters.
     p = Perceptron(
-        n_inputs=n_inputs, activation=linear_function, alpha=0.005,
-        max_iter=100, training_algorithm=linear_perceptron
+        n_inputs=n_inputs,
+        activation=linear_function,
+        alpha=0.005,
+        max_iter=100,
+        training_algorithm=linear_perceptron,
+        mode="online", # If mode is online, batch_size is ignored
+        batch_size=8,
+        shuffle=True
     )
 
     # 3. CONSOLE OUTPUT (HEADER)
@@ -63,6 +70,13 @@ def run_linear_perceptron_regression(csv_file_path: str):
         input_features = x_full[1:]
         input_str = f"[{input_features[0]:.1f}, {input_features[1]:.1f}, {input_features[2]:.1f}]"
         print(f"| {input_str:<18} | {y_expected:^12.3f} | {y_pred:^13.3f} | {abs_error_val:^14.3f} |")
+
+    # Graph the training error over epochs
+    plt.plot(p.error_history)
+    plt.xlabel("Epoch")
+    plt.ylabel("Error")
+    plt.title(f"Training Error ({p.mode})")
+    plt.show()
 
 
 
@@ -117,6 +131,9 @@ def run_nonlinear_perceptron(csv_file_path: str, activation: str = "tanh", beta:
         alpha=effective_alpha,
         max_iter=500,
         training_algorithm=nonlinear_perceptron,
+        mode="online",  # If mode is online, batch_size is ignored
+        batch_size=8,
+        shuffle=True
     )
 
     print("==================================================")
@@ -139,3 +156,10 @@ def run_nonlinear_perceptron(csv_file_path: str, activation: str = "tanh", beta:
         input_features = x_full[1:]
         input_str = f"[{input_features[0]:.1f}, {input_features[1]:.1f}, {input_features[2]:.1f}]"
         print(f"| {input_str:<18} | {y_expected:^12.3f} | {y_pred:^13.3f} | {abs_error_val:^14.3f} |")
+
+    # Graph the training error over epochs
+    plt.plot(p.error_history)
+    plt.xlabel("Epoch")
+    plt.ylabel("Error")
+    plt.title(f"Training Error ({p.mode})")
+    plt.show()

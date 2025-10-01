@@ -1,4 +1,8 @@
-def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn, convergence_threshold=None):
+import numpy as np
+
+
+def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn,
+               convergence_threshold=None, mode="online", batch_size=16, shuffle=True):
     """
     BASE FUNCTION: Implements the common structure of Stochastic Gradient Descent (SGD) training.
 
@@ -8,6 +12,9 @@ def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn, conve
         update_rule_fn: Function to inject the weight update logic (simple vs. linear).
         convergence_criterion_fn: Function to inject the final stopping condition logic.
         convergence_threshold: Specific threshold for the linear perceptron (SSE).
+        mode: "online", "minibatch", or "batch".
+        batch_size: Size of mini-batches (if mode is "minibatch").
+        shuffle: Whether to shuffle data each epoch.
     """
     weights = list(perceptron.weights)
     alpha = perceptron.alpha
@@ -21,30 +28,51 @@ def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn, conve
 
     perceptron.error_history = []
 
+    idx = np.arange(n_samples)
+
     for epoch in range(max_iter):
-        epoch_error_accumulator = 0
+        if shuffle:
+            np.random.shuffle(idx)
 
-        for i in range(n_samples):
-            x_i = x[i]
-            y_i = y[i]
+        epoch_error_acc = 0.0
 
-            perceptron.weights = weights
-            y_pred = perceptron.predict(x_i)
+        if mode == "batch":
+            for i in idx:
+                perceptron.weights = weights
+                y_pred = perceptron.predict(x[i])
+                linear_error = y[i] - y_pred
+                metric_update, weights = update_rule_fn(weights, linear_error, x[i], alpha, n_features)
+                epoch_error_acc += metric_update
 
-            linear_error = y_i - y_pred
+        elif mode == "minibatch":
+            for start in range(0, n_samples, batch_size):
+                batch = idx[start:start + batch_size]
+                for i in batch:
+                    perceptron.weights = weights
+                    y_pred = perceptron.predict(x[i])
+                    linear_error = y[i] - y_pred
+                    metric_update, weights = update_rule_fn(weights, linear_error, x[i], alpha, n_features)
+                    epoch_error_acc += metric_update
 
-            # INJECTED LOGIC: Calculates metric update and performs weight update
-            metric_update, weights = update_rule_fn(weights, linear_error, x_i, alpha, n_features)
+        else:  # "online"
+            for i in idx:
+                perceptron.weights = weights
+                y_pred = perceptron.predict(x[i])
+                linear_error = y[i] - y_pred
 
-            epoch_error_accumulator += metric_update
+                # INJECTED LOGIC: Calculates metric update and performs weight update
+                metric_update, weights = update_rule_fn(weights, linear_error, x[i], alpha, n_features)
+                epoch_error_acc += metric_update
+
+        perceptron.error_history.append(epoch_error_acc)
 
         # Early Stopping: Track the best model based on the metric
-        if epoch_error_accumulator < min_error:
-            min_error = epoch_error_accumulator
+        if epoch_error_acc < min_error:
+            min_error = epoch_error_acc
             best_weights = list(weights)
 
         # INJECTED LOGIC: Check final stopping condition
-        if convergence_criterion_fn(epoch_error_accumulator, convergence_threshold):
+        if convergence_criterion_fn(epoch_error_acc, convergence_threshold):
             perceptron.weights = best_weights
             perceptron.best_weights = best_weights
             perceptron.min_error = min_error
