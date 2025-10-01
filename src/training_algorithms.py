@@ -67,3 +67,37 @@ def linear_perceptron(perceptron, x, y, min_error_threshold):
         convergence_criterion,
         convergence_threshold=min_error_threshold
     )
+
+
+def nonlinear_perceptron(perceptron, x, y, min_error_threshold):
+    """
+    Trains the Perceptron with a sigmoid-like activation using gradient descent:
+    Δw = α (y - o) θ'(h) x, minimizing SSE. Stops when SSE < threshold.
+    """
+
+    if perceptron.activation_derivative is None:
+        raise ValueError("Se requiere 'activation_derivative' para el perceptrón no lineal.")
+
+    activation_derivative = perceptron.activation_derivative
+
+    def update_rule_with_derivative(weights, linear_error, x_i, alpha, n_features):
+        # Compute excitation h = w · x
+        h = 0
+        for j in range(n_features):
+            h += weights[j] * x_i[j]
+        deriv = activation_derivative(h)
+        metric_update = (linear_error ** 2)
+        gradient_factor = alpha * linear_error * deriv
+        for j in range(n_features):
+            weights[j] += gradient_factor * x_i[j]
+        return metric_update, weights
+
+    def convergence_criterion(sse, threshold):
+        return sse < threshold
+
+    return train_base(
+        perceptron, x, y,
+        update_rule_with_derivative,
+        convergence_criterion,
+        convergence_threshold=min_error_threshold
+    )

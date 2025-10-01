@@ -2,9 +2,10 @@ import numpy as np
 
 
 class Perceptron:
-    def __init__(self, n_inputs, activation, alpha=0.1, max_iter=100, training_algorithm=None):
+    def __init__(self, n_inputs, activation, alpha=0.1, max_iter=100, training_algorithm=None, activation_derivative=None):
         self.n_inputs = n_inputs
         self.activation = activation
+        self.activation_derivative = activation_derivative
         self.alpha = alpha
         self.max_iter = max_iter
         self.training_algorithm = training_algorithm
