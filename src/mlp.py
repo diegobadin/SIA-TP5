@@ -41,7 +41,8 @@ class Layer:
 
 
 class MLP:
-    def __init__(self, layer_sizes, activations, alpha=0.1, max_iter=100):
+    def __init__(self, layer_sizes, activations, alpha=0.1, max_iter=100,
+                 optimizer: str = "sgd", optimizer_params=None):
         """
         layer_sizes: lista [n_inputs, n_hidden1, ..., n_outputs]
         activations: lista de tuplas (activation, derivative) para cada capa oculta y de salida
@@ -49,6 +50,8 @@ class MLP:
         """
         self.alpha = alpha
         self.max_iter = max_iter
+        self.optimizer_name = (optimizer or "sgd").lower()
+        self.optimizer_params = optimizer_params or {}
 
         # Crear capas
         self.layers = []
@@ -57,6 +60,33 @@ class MLP:
             n_neurons = layer_sizes[i]
             act, dact = activations[i - 1]
             self.layers.append(Layer(n_inputs, n_neurons, act, dact))
+
+        # Optimizer state per layer
+        self._opt_state = []
+        for layer in self.layers:
+            shape = layer.weights.shape
+            if self.optimizer_name == "momentum":
+                mu = self.optimizer_params.get("beta", 0.9)
+                self._opt_state.append({
+                    "v": np.zeros(shape),
+                    "beta": mu
+                })
+            elif self.optimizer_name == "adam":
+                b1 = self.optimizer_params.get("beta1", 0.9)
+                b2 = self.optimizer_params.get("beta2", 0.999)
+                eps = self.optimizer_params.get("eps", 1e-8)
+                self._opt_state.append({
+                    "m": np.zeros(shape),
+                    "v": np.zeros(shape),
+                    "beta1": b1,
+                    "beta2": b2,
+                    "eps": eps,
+                })
+            else:
+                self._opt_state.append({})
+
+        # Global step for optimizers needing it (e.g., Adam)
+        self._step = 0
 
     def forward(self, x):
         """
@@ -96,8 +126,29 @@ class MLP:
         for i, layer in enumerate(self.layers):
             if i > 0:
                 a_prev = self.layers[i - 1].a
-            # Regla: W = W + α * δ * a_prev^T
-            layer.weights += self.alpha * np.outer(deltas[i], a_prev)
+            # Gradiente local (en el sentido del update usado en perceptrón):
+            grad = np.outer(deltas[i], a_prev)
+
+            # Aplicar optimizador
+            if self.optimizer_name == "momentum":
+                state = self._opt_state[i]
+                beta = state["beta"]
+                state["v"] = beta * state["v"] + self.alpha * grad
+                step = state["v"]
+            elif self.optimizer_name == "adam":
+                state = self._opt_state[i]
+                self._step += 1
+                b1, b2, eps = state["beta1"], state["beta2"], state["eps"]
+                state["m"] = b1 * state["m"] + (1 - b1) * grad
+                state["v"] = b2 * state["v"] + (1 - b2) * (grad * grad)
+                m_hat = state["m"] / (1 - (b1 ** self._step))
+                v_hat = state["v"] / (1 - (b2 ** self._step))
+                step = self.alpha * m_hat / (np.sqrt(v_hat) + eps)
+            else:
+                # SGD simple
+                step = self.alpha * grad
+
+            layer.weights += step
 
     def fit(self, X, Y):
         """
