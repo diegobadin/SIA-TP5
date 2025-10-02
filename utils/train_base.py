@@ -37,22 +37,48 @@ def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn,
         epoch_error_acc = 0.0
 
         if mode == "batch":
+            # 1) congelar pesos y acumular deltas para el dataset COMPLETO
+            perceptron.weights = weights
+            delta_w = np.zeros(n_features, dtype=float)
             for i in idx:
-                perceptron.weights = weights
                 y_pred = perceptron.predict(x[i])
                 linear_error = y[i] - y_pred
-                metric_update, weights = update_rule_fn(weights, linear_error, x[i], alpha, n_features)
+
+                # alpha=1 y pesos temporales para medir "cuánto" cambiarían -- no deben cambiar aún en batch
+                tmp_w = list(weights)
+                metric_update, w_new = update_rule_fn(tmp_w, linear_error, x[i], 1.0, n_features)
                 epoch_error_acc += metric_update
 
+                # Acumular el delta propuesto
+                for j in range(n_features):
+                    delta_w[j] += (w_new[j] - tmp_w[j])
+
+            # 2) aplicar UNA sola actualización al final de la época
+            for j in range(n_features):
+                weights[j] += perceptron.alpha * delta_w[j]
+
+
+
         elif mode == "minibatch":
+            # 1) recorrer mini-batches y acumular deltas dentro de cada lote
             for start in range(0, n_samples, batch_size):
                 batch = idx[start:start + batch_size]
+                perceptron.weights = weights  # congelar durante el mini-lote
+                delta_w = np.zeros(n_features, dtype=float)
+
                 for i in batch:
-                    perceptron.weights = weights
                     y_pred = perceptron.predict(x[i])
                     linear_error = y[i] - y_pred
-                    metric_update, weights = update_rule_fn(weights, linear_error, x[i], alpha, n_features)
+
+                    tmp_w = list(weights)
+                    metric_update, w_new = update_rule_fn(tmp_w, linear_error, x[i], 1.0, n_features)
                     epoch_error_acc += metric_update
+                    for j in range(n_features):
+                        delta_w[j] += (w_new[j] - tmp_w[j])
+
+                # 2) una sola actualización por mini-lote
+                for j in range(n_features):
+                    weights[j] += perceptron.alpha * delta_w[j]
 
         else:  # "online"
             for i in idx:
