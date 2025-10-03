@@ -1,281 +1,205 @@
 # exercises/ex3.py
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 
-from src.mlp import MLP
-from utils.activations import logistic_function_factory
+from src.mlp.activations import (
+    TANH, SIGMOID, SOFTMAX
+)
+from src.mlp.mlp import (
+    MLP,accuracy_score, cross_validate, StratifiedKFold, holdout_split
+)
+from src.mlp.erorrs import (
+     CrossEntropyLoss, MSELoss
+    
+)
+
+from src.mlp.optimizers import (
+    Adam, Momentum, SGD
+)
+
 from utils.parse_csv_data import parse_digits_7x5_txt
 
+# ===================== Config de gráficos =====================
+SAVE_FIGS = True
+OUT_DIR = "outputs"
+os.makedirs(OUT_DIR, exist_ok=True)
 
+# ===================== Helpers de gráficos =====================
+def plot_loss(history, loss_name="Loss", title="Training loss", fname=None):
+    if history is None or len(history) == 0:
+        print("[plot_loss] No hay history para graficar.")
+        return
+    plt.figure()
+    plt.plot(range(1, len(history) + 1), history)
+    plt.xlabel("Época")
+    plt.ylabel(loss_name)
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
 
+def plot_cv_scores(res, title="CV scores", fname=None):
+    scores = res.get("scores", None)
+    if scores is None or len(scores) == 0:
+        print("[plot_cv_scores] No hay scores para graficar.")
+        return
+    idx = np.arange(1, len(scores) + 1)
+    plt.figure()
+    plt.bar(idx, scores)
+    plt.axhline(res["mean"], linestyle="--", linewidth=1)
+    plt.xticks(idx, [f"Fold {i}" for i in idx])
+    plt.ylabel("Accuracy")
+    plt.title(f"{title} (mean={res['mean']:.3f} ± {res['std']:.3f})")
+    plt.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+
+# ===================== Entrenamiento con curvas de ACC =====================
+def train_with_acc_curves(model, Xtr, Ytr, Xte, Yte,
+                          epochs=200, batch_size=16,
+                          shuffle=True, verbose=False):
+    """
+    Entrena de a 1 época y mide accuracy en train y test por cada época.
+    Devuelve: (losses, train_accs, test_accs).
+    """
+    losses, train_accs, test_accs = [], [], []
+    for ep in range(epochs):
+        # entreno UNA época
+        last_loss = model.fit(Xtr, Ytr, epochs=1, batch_size=batch_size,
+                              shuffle=shuffle, verbose=False)[-1]
+        losses.append(last_loss)
+
+        # métricas
+        train_accs.append(accuracy_score(Ytr, model.predict(Xtr)))
+        test_accs.append(accuracy_score(Yte, model.predict(Xte)))
+
+        if verbose and ((ep + 1) % max(1, epochs // 10) == 0):
+            print(f"[{ep+1:03d}/{epochs}] loss={last_loss:.4f} "
+                  f"train_acc={train_accs[-1]:.3f} test_acc={test_accs[-1]:.3f}")
+    return losses, train_accs, test_accs
+
+def plot_acc_curves(train_accs, test_accs, title="Accuracy vs Época", fname=None):
+    plt.figure()
+    plt.plot(range(1, len(train_accs)+1), train_accs, label="Train")
+    plt.plot(range(1, len(test_accs)+1),  test_accs,  label="Test")
+    plt.xlabel("Época")
+    plt.ylabel("Accuracy")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+
+# ===================== Runner de experimentos =====================
 def run(item: str):
-    item = item.lower()
-    if item == "xor":
-        return run_xor()
-    if item == "parity":
-        return run_parity()
-    if item in ("digit", "digits"):
-        return run_digits()
-    raise ValueError(f"item desconocido: {item} (usa: xor | parity | digits)")
+    item = (item or "").lower().strip()
 
+    if item in ("xor"):
+        # ---------- ITEM 1: XOR ----------
+        X = np.array([[-1,  1],
+                      [ 1, -1],
+                      [-1, -1],
+                      [ 1,  1]], dtype=float)
+        Y = np.array([[1], [1], [0], [0]], dtype=float)
 
-## item 1
+        model = MLP(
+            layer_sizes=[2, 6, 1],
+            activations=[TANH, SIGMOID],
+            loss=MSELoss(),
+            optimizer=Adam(lr=0.1),
+            seed=7,
+            w_init_scale=0.5
+        )
 
-def run_xor(
-        alpha=0.1,
-        epochs=5000,
-        hidden=3,
-        seed=0
-):
-    np.random.seed(seed)
-    layer_sizes = [2, hidden, 1]
-    activations = [
-        logistic_function_factory(),  # capa oculta
-        logistic_function_factory()   # capa salida
-    ]
-    mlp = MLP(layer_sizes, activations, alpha=alpha, max_iter=epochs)
+        # Split 50/50 para poder graficar acc de train/test
+        Xtr, Xte, Ytr, Yte = holdout_split(X, Y, test_size=0.5, shuffle=True, seed=7)
+        losses, tr_accs, te_accs = train_with_acc_curves(
+            model, Xtr, Ytr, Xte, Yte, epochs=200, batch_size=1, shuffle=True, verbose=True
+        )
+        plot_loss(losses, loss_name=type(model.loss).__name__, title="XOR - Loss vs Época", fname="xor_loss.png")
+        plot_acc_curves(tr_accs, te_accs, title="XOR - Accuracy vs Época", fname="xor_acc.png")
 
-    # Dataset XOR
-    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=float)
-    Y = np.array([[0], [1], [1], [0]], dtype=float)
+        plt.show()
 
-    # Historial de error por época
-    mlp.fit(X.tolist(), Y.tolist())
+    elif item in ("parity"):
+        # ---------- ITEM 2: PARITY ----------
+        X, labels = parse_digits_7x5_txt("data/TP3-ej3-digitos.txt")
+        # Escalar a [-1,1] para TANH
+        X = X * 2.0 - 1.0
+        # 0 = par, 1 = impar
+        Y = (labels % 2).astype(float).reshape(-1, 1)
+        in_dim = X.shape[1]
 
-    # Resultados finales
-    print("\n=== XOR Results ===")
-    correct = 0
-    print(f"{'Input':<10} {'Expected':<10} {'Pred':<10} {'Class':<6}")
-    print("-" * 40)
-    for x, y in zip(X, Y):
-        pred = mlp.predict(x)
-        pred_class = int(pred[0] > 0.5)
-        print(f"{x} {y[0]:<10} {pred[0]:<10.3f} {pred_class:<6}")
-        if pred_class == y[0]:
-            correct += 1
+        model = MLP(
+            layer_sizes=[in_dim, 32, 1],
+            activations=[TANH, SIGMOID],
+            loss=CrossEntropyLoss(),      # BCE con sigmoid
+            optimizer=Adam(lr=1e-3),
+            seed=123,
+            w_init_scale=0.2
+        )
 
-    accuracy = correct / len(Y)
-    print(f"\nFinal Accuracy: {accuracy*100:.2f}%")
+        Xtr, Xte, Ytr, Yte = holdout_split(X, Y, test_size=0.3, shuffle=True, seed=123)
+        losses, tr_accs, te_accs = train_with_acc_curves(
+            model, Xtr, Ytr, Xte, Yte, epochs=250, batch_size=16, shuffle=True, verbose=True
+        )
+        plot_loss(losses, loss_name=type(model.loss).__name__, title="Parity - Loss vs Época", fname="parity_loss.png")
+        plot_acc_curves(tr_accs, te_accs, title="Parity - Accuracy vs Época", fname="parity_acc.png")
 
-    # Graficar curva de error
-    # plt.plot(mlp.error_history)
-    # plt.xlabel("Epoch")
-    # plt.ylabel("MSE")
-    # plt.title("Training Error on XOR (MLP)")
-    # plt.show()
+        # (opcional) CV
+        res = cross_validate(
+            model_factory=lambda: MLP([in_dim, 32, 1],[TANH, SIGMOID],
+                                      CrossEntropyLoss(), Adam(lr=1e-3),
+                                      seed=123, w_init_scale=0.2),
+            X=X, Y=Y,
+            splitter=StratifiedKFold(n_splits=5, shuffle=True, seed=123),
+            fit_kwargs=dict(epochs=250, batch_size=16, verbose=False)
+        )
+        print(f"[PARITY] CV mean acc: {res['mean']:.4f} ± {res['std']:.4f}")
 
+        plt.show()
 
-## item 2
+    elif item in ("digits"):
+        # ---------- ITEM 3: DIGITS ----------
+        X, labels = parse_digits_7x5_txt("data/TP3-ej3-digitos.txt")
+        # Escalar a [-1,1] para TANH
+        X = X * 2.0 - 1.0
+        Y = np.eye(10, dtype=float)[labels]
+        in_dim, out_dim = X.shape[1], Y.shape[1]
 
-def run_parity(
-    data_path: str = "./data/TP3-ej3-digitos.txt",
-    split_mode: str = "kfold",    # "holdout" | "stratified" | "kfold" | "stratified_kfold"
-    val_ratio: float = 0.2,            # usado en holdout
-    k: int = 5,                        # usado en kfold
-    hidden: int = 16,
-    alpha: float = 0.05,
-    epochs: int = 300,
-    optimizer: str = "adam",
-    optimizer_params: dict | None = None,
-    seed: int = 0,
-    show_all_preds: bool = True        # imprime todas las preds del split de validación (holdout)
-):
-    # parseo data
-    X, labels = parse_digits_7x5_txt(data_path)  # X: (N,35), labels: 0..9
-    y_par = (labels % 2 == 0).astype(float).reshape(-1, 1)  # 1=par, 0=impar
-    N, D = X.shape
+        model = MLP(
+            layer_sizes=[in_dim, 32, 16, out_dim],
+            activations=[TANH, TANH, SOFTMAX],
+            loss=CrossEntropyLoss(),
+            optimizer=Adam(lr=1e-3),
+            seed=42,
+            w_init_scale=0.2
+        )
 
-    # separado según modo de partición con folds o holdout
-    if split_mode in ("holdout", "stratified"):
-        if split_mode == "holdout":
-            tr_idx, va_idx = split_holdout(N, val_ratio=val_ratio, seed=seed)
-        else:
-            tr_idx, va_idx = split_stratified(y_par, val_ratio=val_ratio, seed=seed)
+        Xtr, Xte, Ytr, Yte = holdout_split(X, Y, test_size=0.3, shuffle=True, seed=42)
+        losses, tr_accs, te_accs = train_with_acc_curves(
+            model, Xtr, Ytr, Xte, Yte, epochs=300, batch_size=16, shuffle=True, verbose=True
+        )
+        plot_loss(losses, loss_name=type(model.loss).__name__, title="Digits - Loss vs Época", fname="digits_loss.png")
+        plot_acc_curves(tr_accs, te_accs, title="Digits - Accuracy vs Época", fname="digits_acc.png")
 
-        Xtr, Ytr = X[tr_idx], y_par[tr_idx]
-        Xva, Yva = X[va_idx], y_par[va_idx]
+        # (opcional) CV
+        res = cross_validate(
+            model_factory=lambda: MLP([in_dim, 32, 16, out_dim],
+                                      [TANH, TANH, SOFTMAX],
+                                      CrossEntropyLoss(), Adam(lr=1e-3),
+                                      seed=42, w_init_scale=0.2),
+            X=X, Y=Y,
+            splitter=StratifiedKFold(n_splits=5, shuffle=True, seed=42),
+            fit_kwargs=dict(epochs=300, batch_size=16, verbose=False)
+        )
+        print(f"[DIGITS] CV mean acc: {res['mean']:.4f} ± {res['std']:.4f}")
 
-        mlp = _build_mlp(D, hidden, alpha, epochs, optimizer, optimizer_params)
-        mlp.fit(Xtr.tolist(), Ytr.tolist())
-
-        ytr_cls, _ = _predict_classes(mlp, Xtr)
-        yva_cls, yva_prob = _predict_classes(mlp, Xva)
-
-        acc_tr = _accuracy(Ytr, ytr_cls)
-        acc_va = _accuracy(Yva, yva_cls)
-        tp, fp, fn, tn = _confusion(Yva, yva_cls)
-
-        print("\n=== Paridad (MLP) ===")
-        print(f"Arquitectura: [{D}, {hidden}, 1] / opt: {optimizer}")
-        print(f"alpha={alpha}  epochs={epochs}  hidden={hidden}")
-        print(f"Accuracy Train: {acc_tr*100:.2f}%")
-        print(f"Accuracy Val:   {acc_va*100:.2f}%")
-        print("\nConfusión (Val) [clase=1: par]")
-        print(f"TP={tp}  FP={fp}  FN={fn}  TN={tn}")
-
-        # tabla de validación
-        df_val = pd.DataFrame({
-            "idx": va_idx,
-            "digit": labels[va_idx],
-            "true_parity": Yva.flatten().astype(int),
-            "predicted": yva_cls.flatten().astype(int),
-            "prob": yva_prob.flatten()
-        }).sort_values("idx").reset_index(drop=True)
-
-        if show_all_preds:
-            print("\nTodas las predicciones (Validación):")
-            for i in range(len(df_val)):
-                row = df_val.iloc[i]
-                print(f"idx={int(row.idx):02d}  dígito={int(row.digit)}  "
-                      f"y*={int(row.true_parity)}   ŷ={int(row.predicted)}   p={row.prob:.3f}")
-
-        return df_val
-
-
-    elif split_mode in ("kfold", "stratified_kfold"):
-
-        folds = split_kfold(N, k=k, seed=seed) if split_mode == "kfold" else split_stratified_kfold(y_par, k=k,seed=seed)
-
-        accs, rows = [], []
-
-        all_val_rows = []  # acumulador de todas las predicciones de validación
-
-        print(f"\n=== Paridad (MLP) K-Fold (modo={split_mode}, k={k}) ===")
-
-        for i in range(k):
-            va_idx = np.array(folds[i])
-            tr_idx = np.setdiff1d(np.arange(N), va_idx, assume_unique=False)
-            Xtr, Ytr = X[tr_idx], y_par[tr_idx]
-            Xva, Yva = X[va_idx], y_par[va_idx]
-
-            mlp = _build_mlp(D, hidden, alpha, epochs, optimizer, optimizer_params)
-
-            mlp.fit(Xtr.tolist(), Ytr.tolist())
-
-            yva_cls, yva_prob = _predict_classes(mlp, Xva)
-            acc = _accuracy(Yva, yva_cls)
-            accs.append(acc)
-
-            print(f"\nFold {i + 1}/{k}  Acc={acc * 100:.1f}%  (val n={len(va_idx)})")
-            print("Predicciones (Validación del fold):")
-
-            df_fold = pd.DataFrame({
-                "fold": i + 1,
-                "idx": va_idx,
-                "digit": labels[va_idx],
-                "true_parity": Yva.flatten().astype(int),
-                "predicted": yva_cls.flatten().astype(int),
-                "prob": yva_prob.flatten()
-            }).sort_values("idx").reset_index(drop=True)
-
-            for j in range(len(df_fold)):
-                r = df_fold.iloc[j]
-
-                print(
-                    f"idx={int(r.idx):02d}  dígito={int(r.digit)}  y*={int(r.true_parity)}   ŷ={int(r.predicted)}   p={r.prob:.3f}")
-
-            rows.append({"fold": i + 1, "val_n": len(va_idx), "acc": acc})
-            all_val_rows.append(df_fold)
-
-        print(f"\nK-Fold   Acc media={np.mean(accs) * 100:.2f}%   ± {np.std(accs) * 100:.2f}%")
-
-        df_k = pd.DataFrame(rows)
-        df_k_all_preds = pd.concat(all_val_rows, ignore_index=True).sort_values(["fold", "idx"]).reset_index(drop=True)
-        return {"summary": df_k, "val_predictions": df_k_all_preds}
-
+        plt.show()
 
     else:
-        raise ValueError(f"split_mode desconocido: {split_mode}")
-
-
-## item 3  // TODO
-
-def run_digits(
-    data_path="data/TP3-ej3-digitos.txt", split_mode="stratified_kfold", val_ratio=0.2, k=5,
-    hidden=24, alpha=0.05, epochs=600, optimizer="adam", optimizer_params=None, seed=0, show_all_preds=True
-):
-    return -1
-
-# === modos de partición ===
-
-def split_holdout(n, val_ratio=0.2, seed=0):
-    rng = np.random.default_rng(seed)
-    idx = np.arange(n)
-    rng.shuffle(idx)
-    cut = int(n * (1 - val_ratio))
-    tr, va = idx[:cut], idx[cut:]
-    return tr, va
-
-def split_stratified(y_bin, val_ratio=0.2, seed=0):
-    rng = np.random.default_rng(seed)
-    y = y_bin.flatten().astype(int)
-    idx_even = np.where(y == 1)[0]
-    idx_odd  = np.where(y == 0)[0]
-    rng.shuffle(idx_even); rng.shuffle(idx_odd)
-
-    def _split(idx):
-        cut = int(len(idx) * (1 - val_ratio))
-        return idx[:cut], idx[cut:]
-
-    tr_e, va_e = _split(idx_even)
-    tr_o, va_o = _split(idx_odd)
-    tr = np.concatenate([tr_e, tr_o])
-    va = np.concatenate([va_e, va_o])
-    rng.shuffle(tr); rng.shuffle(va)
-    return tr, va
-
-def split_kfold(n, k=5, seed=0):
-    rng = np.random.default_rng(seed)
-    idx = np.arange(n)
-    rng.shuffle(idx)
-    folds = np.array_split(idx, k)
-    return folds
-
-def split_stratified_kfold(y_bin, k=5, seed=0):
-    rng = np.random.default_rng(seed)
-    y = y_bin.flatten().astype(int)
-    idx_even = np.where(y == 1)[0]
-    idx_odd  = np.where(y == 0)[0]
-    rng.shuffle(idx_even); rng.shuffle(idx_odd)
-    folds_e = np.array_split(idx_even, k)
-    folds_o = np.array_split(idx_odd, k)
-    folds = [np.concatenate([folds_e[i], folds_o[i]]) for i in range(k)]
-    # opcional: reordenar cada fold
-    for i in range(k):
-        rng.shuffle(folds[i])
-    return folds
-
-
-# ---------------
-
-def _build_mlp(input_dim, hidden, alpha, epochs, optimizer, optimizer_params):
-    act_h, dact_h = logistic_function_factory()
-    act_o, dact_o = logistic_function_factory()
-    mlp = MLP(
-        layer_sizes=[input_dim, hidden, 1],
-        activations=[(act_h, dact_h), (act_o, dact_o)],
-        alpha=alpha,
-        max_iter=epochs,
-        optimizer=optimizer,
-        optimizer_params=(optimizer_params or {})
-    )
-    return mlp
-
-def _predict_classes(mlp, X):
-    # predict por patrón, salida escalar
-    probs = np.array([mlp.predict(x.tolist() if not isinstance(x, list) else x)[0] for x in X]).reshape(-1, 1)
-    cls = (probs >= 0.5).astype(int)
-    return cls, probs
-
-def _accuracy(y_true, y_hat):
-    return float((y_true == y_hat).mean())
-
-def _confusion(y_true, y_hat):
-    tp = int(((y_true == 1) & (y_hat == 1)).sum())
-    tn = int(((y_true == 0) & (y_hat == 0)).sum())
-    fp = int(((y_true == 0) & (y_hat == 1)).sum())
-    fn = int(((y_true == 1) & (y_hat == 0)).sum())
-    return tp, fp, fn, tn
-
-
+        print("Uso: python main.py ex3 <xor | parity | digits >")
