@@ -93,7 +93,7 @@ def plot_kfold_accuracies(accs, title="K-Fold Accuracies"):
     plt.xlabel("Fold")
     plt.ylabel("Accuracy")
     plt.tight_layout()
-    plt.show()
+    plt.show(block=False)
 
 
 def plot_decision_boundary(model, X, Y, title):
@@ -132,7 +132,7 @@ def plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=10, shape=(7, 5)
 
     plt.suptitle("Dígitos originales (izq) y con ruido (der) por nivel de ruido")
     plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
-    plt.show()
+    plt.show(block=False)
 
 
 def plot_accuracy_vs_noise(accuracies, noise_levels):
@@ -142,7 +142,7 @@ def plot_accuracy_vs_noise(accuracies, noise_levels):
     plt.xlabel("Nivel de ruido (%)")
     plt.ylabel("Accuracy")
     plt.grid(True)
-    plt.show()
+    plt.show(block=False)
 
 
 def evaluate_digits_with_noise(model, X, Y, noise_levels=None, n_show=10, shape=(7, 5)):
@@ -178,7 +178,7 @@ def plot_accuracy_folds(accuracies_dict, title="Accuracy por fold"):
     plt.title(title)
     plt.grid(True)
     plt.legend()
-    plt.show()
+    plt.show(block=False)
 
 def plot_accuracy_mean_std(accuracies_dict, title="Promedio de accuracy ± desviación"):
     labels = list(accuracies_dict.keys())
@@ -218,7 +218,7 @@ def plot_mse_mean_std(mse_dict, title="Promedio ± desviación MSE"):
     plt.ylabel("MSE")
     plt.title(title)
     plt.grid(axis='y')
-    plt.show()
+    plt.show(block=False)
 
 def plot_predictions_vs_real(y_true, y_pred_dict, title="Predicciones vs Reales"):
     plt.figure(figsize=(6,6))
@@ -230,7 +230,7 @@ def plot_predictions_vs_real(y_true, y_pred_dict, title="Predicciones vs Reales"
     plt.title(title)
     plt.legend()
     plt.grid(True)
-    plt.show()
+    plt.show(block=False)
 
 def plot_absolute_error(y_true, y_pred_dict, title="Error absoluto por muestra"):
     plt.figure(figsize=(8,5))
@@ -242,4 +242,4 @@ def plot_absolute_error(y_true, y_pred_dict, title="Error absoluto por muestra")
     plt.title(title)
     plt.grid(True)
     plt.legend()
-    plt.show()
+    plt.show(block=False)
