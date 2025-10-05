@@ -243,3 +243,39 @@ def plot_absolute_error(y_true, y_pred_dict, title="Error absoluto por muestra")
     plt.grid(True)
     plt.legend()
     plt.show(block=False)
+
+def plot_decision_boundary_2(perceptron, x, y, title):
+    x = np.array(x)
+    y = np.array(y)
+    weights = perceptron.weights
+
+    # Frontera: w0 + w1*x1 + w2*x2 = 0  ->  x2 = -(w0 + w1*x1) / w2
+    x1_vals = np.linspace(-1.5, 1.5, 100)
+    x2_vals = -(weights[0] + weights[1]*x1_vals) / weights[2]
+
+    plt.figure()
+    plt.scatter(x[y == 1][:, 0], x[y == 1][:, 1], color='blue', label='1 (True)')
+    plt.scatter(x[y == -1][:, 0], x[y == -1][:, 1], color='red', label='-1 (False)')
+    plt.plot(x1_vals, x2_vals, color='green', label='Decision boundary')
+
+    plt.title(f"Decision Boundary - {title}")
+    plt.xlabel("x₁")
+    plt.ylabel("x₂")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+def plot_xor_non_linear(x, y):
+    plt.figure()
+    x = np.array(x)
+    y = np.array(y)
+
+    plt.scatter(x[y == 1][:, 0], x[y == 1][:, 1], color='blue', label='1 (True)')
+    plt.scatter(x[y == -1][:, 0], x[y == -1][:, 1], color='red', label='-1 (False)')
+
+    plt.title("XOR - Not Linearly Separable")
+    plt.xlabel("x₁")
+    plt.ylabel("x₂")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
