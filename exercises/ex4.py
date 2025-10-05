@@ -88,7 +88,7 @@ def run():
 
     # Evaluación final en el set de TEST oficial de Keras
 
-    print("Iniciando Evaluación final en el set de TEST oficial de Keras")
+    print("Iniciando Evaluación final en el set de TEST oficial de Keras [Reentrenado con todo el conjunto de entrenamiento]")
     # Reentrenar un modelo con TODO el conjunto de entrenamiento
     final_model = make_model(SEED)
     final_model.fit(x_train, y_train, epochs=20, batch_size=64, verbose=True)
