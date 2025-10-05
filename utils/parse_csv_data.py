@@ -47,7 +47,7 @@ def parse_csv_data(file_path):
 # ----- lector del archivo 7x5 -----
 def parse_digits_7x5_txt(path: str):
     """
-    Lee data/TP3-ej3-digitos.txt donde cada dígito son 7 líneas de 5 píxeles (0/1).
+    Lee data/TP3-ej3-digitos_extra.txt donde cada dígito son 7 líneas de 5 píxeles (0/1).
     Devuelve:
       X: (N, 35)  float
       labels: (N,) enteros 0..9 asumiendo orden cíclico; si hay más de 10, usa i % 10.
