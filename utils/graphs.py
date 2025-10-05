@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from utils.metrics import accuracy_score
+from utils.noise import add_noise
 
 # ===================== Config de gráficos =====================
 SAVE_FIGS = True
@@ -109,3 +110,59 @@ def plot_decision_boundary(model, X, Y, title):
     plt.scatter(X[:,0], X[:,1], c=Y.ravel(), edgecolors="k", s=80)
     plt.title(title)
     plt.xlabel("x1"); plt.ylabel("x2"); plt.tight_layout(); plt.show()
+
+
+def plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=10, shape=(7, 5)):
+    plt.figure(figsize=(12, len(noise_levels) * 3))
+    n_show_digits = min(n_show, len(X))
+
+    for i, noise_level in enumerate(noise_levels):
+        X_noisy_level = X_noisy_all[i]
+        for j in range(n_show_digits):
+            plt.subplot(len(noise_levels), n_show_digits * 2, i * n_show_digits * 2 + j * 2 + 1)
+            plt.imshow((X[j] >= 0).astype(int).reshape(shape), cmap='gray_r')
+            if i == 0:
+                plt.title(f"{j}")
+            plt.axis('off')
+
+            # Con ruido
+            plt.subplot(len(noise_levels), n_show_digits * 2, i * n_show_digits * 2 + j * 2 + 2)
+            plt.imshow((X_noisy_level[j] >= 0.5).astype(int).reshape(shape), cmap='gray_r')
+            plt.axis('off')
+
+    plt.suptitle("Dígitos originales (izq) y con ruido (der) por nivel de ruido")
+    plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    plt.show()
+
+
+def plot_accuracy_vs_noise(accuracies, noise_levels):
+    plt.figure()
+    plt.plot([n * 100 for n in noise_levels], accuracies, marker='o')
+    plt.title("Precisión del modelo vs Nivel de ruido")
+    plt.xlabel("Nivel de ruido (%)")
+    plt.ylabel("Accuracy")
+    plt.grid(True)
+    plt.show()
+
+
+def evaluate_digits_with_noise(model, X, Y, noise_levels=None, n_show=10, shape=(7, 5)):
+    if noise_levels is None:
+        noise_levels = [0.0, 0.1, 0.3, 0.5]
+
+    accuracies = []
+    X_bin = (X + 1) / 2  # desescalar a [0,1] para agregar ruido
+
+    X_noisy_all = []
+    for noise_level in noise_levels:
+        X_noisy = add_noise(X_bin, noise_level=noise_level, seed=42)
+        X_noisy_scaled = X_noisy * 2 - 1  # reescalar a [-1,1] para TANH
+
+        predictions = model.predict(X_noisy_scaled)
+        acc = accuracy_score(Y, predictions)
+        accuracies.append(acc)
+        X_noisy_all.append(X_noisy)
+
+        print(f"Ruido {int(noise_level * 100)}% → Precisión: {acc:.3f}")
+
+    plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=n_show, shape=shape)
+    plot_accuracy_vs_noise(accuracies, noise_levels)
