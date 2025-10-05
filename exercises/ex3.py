@@ -17,7 +17,7 @@ from src.mlp.optimizers import (
     Adam, Momentum, SGD
 )
 from utils.graphs import plot_loss, plot_acc_curves, train_with_acc_curves, plot_kfold_accuracies, \
-    plot_decision_boundary
+    plot_decision_boundary, evaluate_digits_with_noise
 from utils.metrics import cross_validate, accuracy_score
 
 from utils.parse_csv_data import parse_digits_7x5_txt
@@ -174,6 +174,9 @@ def run(item: str):
         )
         title = f"Digits · {splitter}"
         plot_kfold_accuracies(res["folds"], title=title)
+
+        # --- Evaluación con ruido ---
+        evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.3, 0.5], n_show=10)
 
         plt.show()
 

@@ -12,25 +12,6 @@ def accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     ytru = np.argmax(y_true, axis=1) if (y_true.ndim==2 and y_true.shape[1]>1) else y_true.ravel().astype(int)
     return float(np.mean(yhat == ytru))
 
-# def cross_validate(model_factory: Callable[[], MLP],
-#                    X: np.ndarray, Y: np.ndarray,
-#                    splitter, fit_kwargs: Optional[Dict[str,Any]] = None,
-#                    scoring: Callable[[np.ndarray,np.ndarray], float] = accuracy_score) -> Dict[str,Any]:
-#     fit_kwargs = fit_kwargs or {}
-#     scores = []
-#     for tr, va in splitter.split(X, Y):
-#         if va.size == 0 or tr.size == 0:  # <- salta folds vacíos
-#             continue
-#         model = model_factory()
-#         model.fit(X[tr], Y[tr], **fit_kwargs)
-#         y_pred = model.predict(X[va])
-#         scores.append(scoring(Y[va], y_pred))
-#     return {"scores": np.array(scores),
-#             "mean": float(np.mean(scores)) if scores else float("nan"),
-#             "std": float(np.std(scores)) if scores else float("nan")}
-#
-# import numpy as np
-
 def cross_validate(model_factory, X, Y, splitter, fit_kwargs=None, scoring=accuracy_score):
     """
        Realiza cross-validation con cualquier splitter (Holdout, KFold, StratifiedKFold)
