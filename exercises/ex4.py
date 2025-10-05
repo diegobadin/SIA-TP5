@@ -21,7 +21,7 @@ def run():
         return (x_train, y_train), (x_test, y_test)
 
     (x_train, y_train_labels), (x_test, y_test_labels) = load_mnist_npz()
-    
+
     # verifición que se descargó correctamente la data
     with np.load("mnist.npz") as f:
         assert set(f.keys()) == {"x_train", "x_test", "y_train", "y_test"}, \
@@ -89,7 +89,10 @@ def run():
     # Evaluación final en el set de TEST oficial de Keras
 
     print("Iniciando Evaluación final en el set de TEST oficial de Keras")
+    # Reentrenar un modelo con TODO el conjunto de entrenamiento
+    final_model = make_model(SEED)
+    final_model.fit(x_train, y_train, epochs=20, batch_size=64, verbose=True)
 
-    test_acc = accuracy_score(y_test, model.predict(x_test))
+    test_acc = accuracy_score(y_test, final_model.predict(x_test))
     print(f"[TEST] Accuracy={test_acc:.4f}")
 
