@@ -1,16 +1,21 @@
 import os
 
+import numpy as np
+
 from src.perceptron import Perceptron
 from src.training_algorithms import linear_perceptron, nonlinear_perceptron
 from utils.activations import (
     linear_function,
-    logistic_function_factory,
-    tanh_function_factory,
     scaled_logistic_function_factory,
-    scaled_tanh_function_factory,
+    scaled_tanh_function_factory, tanh_function_factory,
 )
+from utils.graphs import plot_accuracy_mean_std, plot_accuracy_folds, plot_predictions_vs_real, plot_absolute_error, \
+    plot_mse_folds, plot_mse_mean_std
+from utils.metrics import accuracy_score, cross_validate, cross_validate_regression, sse_score
 from utils.parse_csv_data import parse_csv_data
 import matplotlib.pyplot as plt
+
+from utils.splits import StratifiedKFold, KFold, HoldoutSplit
 
 
 def run_linear_perceptron_regression(csv_file_path: str):
@@ -77,19 +82,6 @@ def run_linear_perceptron_regression(csv_file_path: str):
     plt.ylabel("Error")
     plt.title(f"Training Error ({p.mode})")
     plt.show()
-
-
-
-def run(csv_file_path: str, model_type: str):
-    """Maps the model type to the corresponding runner function."""
-    model_type = model_type.lower()
-    if model_type == "lineal":
-        run_linear_perceptron_regression(csv_file_path)
-    elif model_type == "no_lineal":
-        run_nonlinear_perceptron(csv_file_path)
-    else:
-        print(f"Error: Model type '{model_type}' not recognized. Use 'lineal' or 'no_lineal'.")
-
 
 def run_nonlinear_perceptron(csv_file_path: str, activation: str = "tanh", beta: float = 1.0):
     """
@@ -163,3 +155,85 @@ def run_nonlinear_perceptron(csv_file_path: str, activation: str = "tanh", beta:
     plt.ylabel("Error")
     plt.title(f"Training Error ({p.mode})")
     plt.show()
+
+
+def run_perceptron_experiment(csv_file_path: str, lr: float = 0.01, epochs: int = 100, beta: float = 1.0):
+
+    # --- Cargar datos ---
+    X, Y = parse_csv_data(csv_file_path)
+    if not X:
+        return
+    X = np.array(X)
+    Y = np.array(Y)
+
+    # --- Agregar bias ---
+    X_bias = np.hstack([np.ones((X.shape[0], 1)), X])
+    n_inputs = X_bias.shape[1]
+
+    # --- Definir splitter (solo KFold) ---
+    splitter = KFold(n_splits=5, shuffle=True, seed=42)
+
+    # --- Definir factories de perceptrones ---
+    linear_factory = lambda: Perceptron(
+        n_inputs=n_inputs,
+        activation=linear_function,
+        alpha=lr,
+        max_iter=epochs,
+        training_algorithm=linear_perceptron,
+    )
+
+    non_linear_factory = lambda: Perceptron(
+        n_inputs=n_inputs,
+        activation=lambda h: np.tanh(beta * h),
+        activation_derivative=lambda h: 1 - np.tanh(beta * h) ** 2,
+        alpha=lr,
+        max_iter=epochs,
+        training_algorithm=nonlinear_perceptron,
+    )
+
+    results = {}
+
+    # --- Cross-validate (MSE por fold) ---
+    mse_lin_folds = cross_validate_regression(linear_factory, X_bias, Y, splitter, scoring=sse_score)
+    mse_nonlin_folds = cross_validate_regression(non_linear_factory, X_bias, Y, splitter, scoring=sse_score)
+
+    results['Lineal'] = mse_lin_folds
+    results['No Lineal'] = mse_nonlin_folds
+
+    # --- Graficar MSE por fold ---
+    plot_accuracy_folds(results, title="MSE por fold (KFold)")
+
+    # --- Entrenar ambos modelos con todo el dataset para ver predicciones ---
+    model_lin_full = linear_factory()
+    model_lin_full.fit(X_bias, Y)
+    y_pred_lin_full = np.array([model_lin_full.predict(x) for x in X_bias])
+
+    model_nonlin_full = non_linear_factory()
+    model_nonlin_full.fit(X_bias, Y)
+    y_pred_nonlin_full = np.array([model_nonlin_full.predict(x) for x in X_bias])
+
+    y_pred_dict_full = {'Lineal': y_pred_lin_full, 'No Lineal': y_pred_nonlin_full}
+
+    # --- Graficar predicciones vs reales y errores absolutos ---
+    plot_predictions_vs_real(Y, y_pred_dict_full, title="Predicciones vs Reales (Todo el dataset)")
+    plot_absolute_error(Y, y_pred_dict_full, title="Error absoluto por muestra (Todo el dataset)")
+
+    # --- Mostrar resumen de MSE ---
+    for model_name, vals in results.items():
+        print(f"{model_name}: mean MSE={np.mean(vals):.3f}, std MSE={np.std(vals):.3f}")
+
+    return results
+
+
+def run(csv_file_path: str, model_type: str):
+    """Maps the model type to the corresponding runner function."""
+    model_type = model_type.lower()
+    if model_type == "lineal":
+        run_linear_perceptron_regression(csv_file_path)
+    elif model_type == "no_lineal":
+        run_nonlinear_perceptron(csv_file_path)
+    elif model_type == "experiment":
+        run_perceptron_experiment(csv_file_path)
+    else:
+        print(f"Error: Model type '{model_type}' not recognized. Use 'lineal' or 'no_lineal'.")
+

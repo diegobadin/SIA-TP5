@@ -46,7 +46,8 @@ def linear_perceptron_rule(weights, linear_error, x_i, alpha, n_features):
     """
     metric_update = linear_error ** 2  # The error metric is the Squared Error
     # The Delta Rule update: W = W + alpha * Error * X (always updates)
-    for j in range(n_features):
+    n = len(x_i) if n_features is None else min(n_features, len(x_i))
+    for j in range(n):
         weights[j] += alpha * linear_error * x_i[j]
     return metric_update, weights
 
@@ -91,12 +92,13 @@ def nonlinear_perceptron(perceptron, x, y, min_error_threshold, mode="online", b
     def update_rule_with_derivative(weights, linear_error, x_i, alpha, n_features):
         # Compute excitation h = w · x
         h = 0
-        for j in range(n_features):
+        n = len(x_i) if n_features is None else min(n_features, len(x_i))
+        for j in range(n):
             h += weights[j] * x_i[j]
         deriv = activation_derivative(h)
         metric_update = (linear_error ** 2)
         gradient_factor = alpha * linear_error * deriv
-        for j in range(n_features):
+        for j in range(n):
             weights[j] += gradient_factor * x_i[j]
         return metric_update, weights
 

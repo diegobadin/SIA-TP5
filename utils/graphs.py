@@ -166,3 +166,80 @@ def evaluate_digits_with_noise(model, X, Y, noise_levels=None, n_show=10, shape=
 
     plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=n_show, shape=shape)
     plot_accuracy_vs_noise(accuracies, noise_levels)
+
+def plot_accuracy_folds(accuracies_dict, title="Accuracy por fold"):
+    folds = np.arange(1, len(list(accuracies_dict.values())[0]) + 1)
+    plt.figure(figsize=(8,5))
+    for label, accs in accuracies_dict.items():
+        plt.plot(folds, accs, marker='o', label=label)
+    plt.xticks(folds)
+    plt.xlabel("Fold")
+    plt.ylabel("Accuracy")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+def plot_accuracy_mean_std(accuracies_dict, title="Promedio de accuracy ± desviación"):
+    labels = list(accuracies_dict.keys())
+    means = [np.mean(accuracies_dict[l]) for l in labels]
+    stds = [np.std(accuracies_dict[l]) for l in labels]
+
+    plt.figure(figsize=(6,5))
+    plt.bar(range(len(labels)), means, yerr=stds, capsize=5, color=['skyblue', 'lightgreen'])
+    plt.xticks(range(len(labels)), labels)
+    plt.ylabel("Accuracy")
+    plt.title(title)
+    plt.grid(axis='y')
+    plt.show()
+
+
+def plot_mse_folds(mse_dict, title="MSE por fold"):
+    folds = np.arange(1, len(list(mse_dict.values())[0]) + 1)
+    plt.figure(figsize=(8,5))
+    for label, mses in mse_dict.items():
+        plt.plot(folds, mses, marker='o', label=label)
+    plt.xticks(folds)
+    plt.xlabel("Fold")
+    plt.ylabel("MSE")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+def plot_mse_mean_std(mse_dict, title="Promedio ± desviación MSE"):
+    labels = list(mse_dict.keys())
+    means = [np.mean(mse_dict[l]) for l in labels]
+    stds = [np.std(mse_dict[l]) for l in labels]
+
+    plt.figure(figsize=(6,5))
+    plt.bar(range(len(labels)), means, yerr=stds, capsize=5, color=['skyblue', 'lightgreen'])
+    plt.xticks(range(len(labels)), labels)
+    plt.ylabel("MSE")
+    plt.title(title)
+    plt.grid(axis='y')
+    plt.show()
+
+def plot_predictions_vs_real(y_true, y_pred_dict, title="Predicciones vs Reales"):
+    plt.figure(figsize=(6,6))
+    for label, y_pred in y_pred_dict.items():
+        plt.scatter(y_true, y_pred, label=label)
+    plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'k--', label='y=x')
+    plt.xlabel("Valores reales")
+    plt.ylabel("Predicciones")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def plot_absolute_error(y_true, y_pred_dict, title="Error absoluto por muestra"):
+    plt.figure(figsize=(8,5))
+    x = np.arange(len(y_true))
+    for label, y_pred in y_pred_dict.items():
+        plt.plot(x, np.abs(y_true - y_pred), marker='o', label=label)
+    plt.xlabel("Muestra")
+    plt.ylabel("Error absoluto")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend()
+    plt.show()

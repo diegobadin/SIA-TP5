@@ -49,3 +49,25 @@ def cross_validate(model_factory, X, Y, splitter, fit_kwargs=None, scoring=accur
             "std": float(np.std(accs)),
             "folds": accs
         }
+
+def cross_validate_regression(model_factory, X, Y, splitter, scoring):
+    results = []
+    for train_idx, test_idx in splitter.split(X, Y):
+        Xtr, Xte = X[train_idx], X[test_idx]
+        Ytr, Yte = Y[train_idx], Y[test_idx]
+
+        model = model_factory()
+        model.fit(Xtr, Ytr)
+
+        y_pred = np.array([model.predict(x) for x in Xte])  # predice fila por fila
+        results.append(scoring(Yte, y_pred))
+    return results
+
+
+def sse_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Sum of Squared Errors for regression.
+    """
+    y_true = y_true.ravel()
+    y_pred = y_pred.ravel()
+    return float(np.sum((y_true - y_pred) ** 2))
