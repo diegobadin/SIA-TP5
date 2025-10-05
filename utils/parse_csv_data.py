@@ -44,48 +44,30 @@ def parse_csv_data(file_path):
 
     return x_features, y_labels
 
-def parse_digits_7x5_txt(file_path: str):
+# ----- lector del archivo 7x5 -----
+def parse_digits_7x5_txt(path: str):
     """
-    - Etiquetas se infieren como 0..9 repetidos.
-
-    Devuelve (X, labels) donde X tiene shape (N, 35) y labels es (N,) en 0..9.
+    Lee data/TP3-ej3-digitos_extra.txt donde cada dígito son 7 líneas de 5 píxeles (0/1).
+    Devuelve:
+      X: (N, 35)  float
+      labels: (N,) enteros 0..9 asumiendo orden cíclico; si hay más de 10, usa i % 10.
     """
+    with open(path, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
 
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                raw_lines = [ln.strip() for ln in f]
+    num_lines_per_digit = 7
+    pixels_per_line = 5
+    num_digits = len(lines) // num_lines_per_digit
 
-        # Filtrar líneas vacías; agrupar de a 7
-        content_lines = [ln for ln in raw_lines if ln != ""]
-        if len(content_lines) % 7 != 0:
-            raise ValueError(
-                f"El archivo no contiene un múltiplo de 7 líneas no vacías (actual: {len(content_lines)})."
-            )
+    arr = []
+    for i in range(num_digits):
+        digit_lines = lines[i * num_lines_per_digit : (i + 1) * num_lines_per_digit]
+        # aplanar 7x5 -> 35
+        pixels = [int(ch) for line in digit_lines for ch in line.split()]
+        if len(pixels) != num_lines_per_digit * pixels_per_line:
+            raise ValueError(f"Fila {i}: esperados 35 píxeles, encontrados {len(pixels)}")
+        arr.append(pixels)
 
-        X = []
-        for i in range(0, len(content_lines), 7):
-            block = content_lines[i:i + 7]
-            flat = []
-            for row in block:
-                tokens = row.split()
-                if len(tokens) != 5:
-                    raise ValueError(f"Fila con {len(tokens)} columnas (se esperaban 5): '{row}'")
-                for tok in tokens:
-                    if tok not in ("0", "1"):
-                        raise ValueError(f"Token inválido (se esperaba 0/1): '{tok}' en fila '{row}'")
-                    flat.append(float(tok))
-            if len(flat) != 35:
-                raise ValueError("Bloque inválido: no se obtuvieron 35 valores.")
-            X.append(flat)
-
-        if not X:
-            raise ValueError("No se pudieron parsear dígitos del archivo de datos.")
-
-    except FileNotFoundError:
-        print(f"Error: The file '{file_path}' was not found.")
-        sys.exit(1)
-
-    X = np.array(X, dtype=int)
-    n = X.shape[0]
-    labels = np.array([idx % 10 for idx in range(n)], dtype=int)
+    X = np.array(arr, dtype=float)
+    labels = (np.arange(num_digits) % 10).astype(int)
     return X, labels
