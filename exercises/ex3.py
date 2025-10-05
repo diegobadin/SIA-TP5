@@ -146,9 +146,9 @@ def run(item: str):
         # Split holdout estratificado 70/30 (rinde un único fold). Útil para graficar train/test.
         # splitter = HoldoutSplit(test_ratio=0.3, shuffle=True, seed=123, stratify=True)
 
-        splitter = KFold(n_splits=5, shuffle=True, seed=123)
+        # splitter = KFold(n_splits=5, shuffle=True, seed=123)
 
-        # splitter = StratifiedKFold(n_splits=5, shuffle=True, seed=123)
+        splitter = StratifiedKFold(n_splits=5, shuffle=True, seed=123)  # Aca se le pase el numero que le pase va a dividir en dos, lo que se puede hacer el ir duplicando la data para que pueda ir agrupando mas
 
         # --- Curvas con UN fold (para graficar train/test)
         tr_idx, te_idx = next(splitter.split(X, Y))
