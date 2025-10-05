@@ -1,10 +1,11 @@
 import sys
-from exercises import ex1, ex2, ex3
+from exercises import ex1, ex2, ex3, ex4
 
 EXPERIMENTS = {
     "ex1": ex1.run,
     "ex2": ex2.run,
     "ex3": ex3.run,
+    "ex4": ex4.run,
 }
 
 
@@ -18,6 +19,8 @@ python main.py ex3 xor
 python main.py ex3 parity
 
 python main.py ex3 digits
+
+python main.py ex4 MNIST
 
 """
 
@@ -59,6 +62,9 @@ def main():
             print("Invalid item. Use: xor | parity | digits")
             return
         run_experiment("ex3",item)
+
+    elif experiment_name == "ex4":
+        run_experiment("ex4")
 
     else:
         print(f"Experiment '{experiment_name}' not recognized.")
