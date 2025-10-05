@@ -21,10 +21,15 @@ def run():
         return (x_train, y_train), (x_test, y_test)
 
     (x_train, y_train_labels), (x_test, y_test_labels) = load_mnist_npz()
-
+    
+    # verifición que se descargó correctamente la data
     with np.load("mnist.npz") as f:
-        print(list(f.keys()))
-        print(f["x_train"].shape, f["x_test"].shape)
+        assert set(f.keys()) == {"x_train", "x_test", "y_train", "y_test"}, \
+            f"Las claves del archivo no son las esperadas: {list(f.keys())}"
+        assert f["x_train"].shape == (60000, 28, 28), \
+            f"x_train tiene shape {f['x_train'].shape}, esperado (60000, 28, 28)"
+        assert f["x_test"].shape == (10000, 28, 28), \
+            f"x_test tiene shape {f['x_test'].shape}, esperado (10000, 28, 28)"
         
     # Reshape, normalizar y convertir a float32
     x_train = x_train.reshape(-1, 28*28).astype('float32') / 255.0
