@@ -2,7 +2,7 @@ import numpy as np
 
 
 def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn,
-               convergence_threshold=None, mode="online", batch_size=16, shuffle=True):
+               convergence_threshold=None, mode="online", batch_size=16, shuffle=True, on_epoch_end=None):
     """
     BASE FUNCTION: Implements the common structure of Stochastic Gradient Descent (SGD) training.
 
@@ -91,6 +91,8 @@ def train_base(perceptron, x, y, update_rule_fn, convergence_criterion_fn,
                 epoch_error_acc += metric_update
 
         perceptron.error_history.append(epoch_error_acc)
+        if on_epoch_end is not None:
+            on_epoch_end(epoch, epoch_error_acc, n_samples, perceptron)
 
         # Early Stopping: Track the best model based on the metric
         if epoch_error_acc < min_error:

@@ -62,9 +62,26 @@ def linear_perceptron(perceptron, x, y, min_error_threshold,
     Trains the Perceptron for Regression using the Delta Rule (Linear Perceptron).
     """
 
+
+
     # Convergence condition for Linear Perceptron (SSE < threshold)
     def convergence_criterion(sse, threshold):
         return sse < threshold
+
+    def update_rule_linear(weights, linear_error, x_i, alpha, n_features):
+        """
+        Delta Rule lineal (identidad): W <- W + eta * error * X
+        """
+        metric_update = (linear_error ** 2)
+        n = len(x_i) if n_features is None else min(n_features, len(x_i))
+        for j in range(n):
+            weights[j] += alpha * linear_error * x_i[j]
+        return metric_update, weights
+
+    def on_epoch_end(epoch, sse, n_samples, model):
+        # save SSE and MSE for graphs (experiment 1)
+        model.sse_history.append(float(sse))
+        model.mse_history.append(float(sse) / float(n_samples))
 
     return train_base(
         perceptron, x, y,
@@ -73,8 +90,8 @@ def linear_perceptron(perceptron, x, y, min_error_threshold,
         convergence_threshold=min_error_threshold,
         mode=mode,
         batch_size=batch_size,
-        shuffle=shuffle
-
+        shuffle=shuffle,
+        on_epoch_end = on_epoch_end
     )
 
 
