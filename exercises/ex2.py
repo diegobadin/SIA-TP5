@@ -225,6 +225,353 @@ def run_perceptron_experiment(csv_file_path: str, lr: float = 0.01, epochs: int 
     return results
 
 
+def run_activation_comparison_experiment(csv_file_path: str, lr: float = 0.01, epochs: int = 20, beta: float = 1.0):
+    """
+    Experimento: Comparación de funciones de activación escaladas
+    Compara sigmoid escalada vs tanh escalada para evaluar impacto en convergencia y error.
+    """
+    print("=" * 60)
+    print("  COMPARACIÓN: SIGMOID ESCALADA vs TANH ESCALADA")
+    print("=" * 60)
+    print(f"Hiperparámetros: η={lr}, Épocas={epochs}, β={beta}")
+
+    # --- Cargar datos ---
+    if csv_file_path.endswith('.txt'):
+        from utils.parse_csv_data import parse_digits_7x5_txt
+        X, Y = parse_digits_7x5_txt(csv_file_path)
+        print(f"Archivo de dígitos detectado: {len(X)} dígitos de {X.shape[1]} píxeles")
+    else:
+        X, Y = parse_csv_data(csv_file_path)
+        if not X:
+            return
+        X = np.array(X)
+        Y = np.array(Y)
+
+    print(f"Datos: {len(X)} muestras, {X.shape[1]} características")
+
+    # --- Normalizar características ---
+    from utils.stats import fmean, pstdev
+    cols = list(zip(*X))
+    means = [fmean(col) for col in cols]
+    stdevs = [max(1e-8, pstdev(col)) for col in cols]
+    X_normalized = np.array([[(val - m)/s for val, m, s in zip(row, means, stdevs)] for row in X])
+
+    # --- Agregar bias ---
+    X_bias = np.hstack([np.ones((X_normalized.shape[0], 1)), X_normalized])
+    n_inputs = X_bias.shape[1]
+
+    # --- Definir splitter ---
+    splitter = KFold(n_splits=5, shuffle=True, seed=42)
+
+    # --- Factories de perceptrones ---
+    def sigmoid_factory():
+        y_min, y_max = Y.min(), Y.max()
+        sigmoid_act, sigmoid_deriv = scaled_logistic_function_factory(beta, y_min, y_max)
+        range_span = max(1e-8, y_max - y_min)
+        effective_alpha = lr / range_span
+        
+        return Perceptron(
+            n_inputs=n_inputs,
+            activation=sigmoid_act,
+            activation_derivative=sigmoid_deriv,
+            alpha=effective_alpha,
+            max_iter=epochs,
+            training_algorithm=nonlinear_perceptron,
+            mode="online"
+        )
+
+    def tanh_factory():
+        y_min, y_max = Y.min(), Y.max()
+        tanh_act, tanh_deriv = scaled_tanh_function_factory(beta, y_min, y_max)
+        range_span = max(1e-8, y_max - y_min)
+        effective_alpha = lr / range_span
+        
+        return Perceptron(
+            n_inputs=n_inputs,
+            activation=tanh_act,
+            activation_derivative=tanh_deriv,
+            alpha=effective_alpha,
+            max_iter=epochs,
+            training_algorithm=nonlinear_perceptron,
+            mode="online"
+        )
+
+    # --- Validación cruzada ---
+    print(f"\nEjecutando validación cruzada...")
+    mse_sigmoid_folds = cross_validate_regression(sigmoid_factory, X_bias, Y, splitter, scoring=sse_score)
+    mse_tanh_folds = cross_validate_regression(tanh_factory, X_bias, Y, splitter, scoring=sse_score)
+
+    # Convertir SSE a MSE
+    mse_sigmoid_folds = [sse / len(Y) for sse in mse_sigmoid_folds]
+    mse_tanh_folds = [sse / len(Y) for sse in mse_tanh_folds]
+
+    # --- Entrenar modelos completos para obtener curvas de entrenamiento ---
+    print(f"\nEntrenando modelos completos...")
+    model_sigmoid_full = sigmoid_factory()
+    model_sigmoid_full.fit(X_bias, Y)
+    
+    model_tanh_full = tanh_factory()
+    model_tanh_full.fit(X_bias, Y)
+
+    # === GRÁFICO: MSE vs Épocas ===
+    plt.figure(figsize=(12, 8))
+    
+    # Verificar si tienen historial de MSE
+    if hasattr(model_sigmoid_full, 'mse_history') and model_sigmoid_full.mse_history:
+        plt.plot(range(1, len(model_sigmoid_full.mse_history) + 1), model_sigmoid_full.mse_history, 
+                label='Sigmoid Escalada', linewidth=3, color='#ff7f0e', marker='o', markersize=4)
+    else:
+        # Si no hay mse_history, usar error_history
+        plt.plot(range(1, len(model_sigmoid_full.error_history) + 1), model_sigmoid_full.error_history, 
+                label='Sigmoid Escalada', linewidth=3, color='#ff7f0e', marker='o', markersize=4)
+    
+    if hasattr(model_tanh_full, 'mse_history') and model_tanh_full.mse_history:
+        plt.plot(range(1, len(model_tanh_full.mse_history) + 1), model_tanh_full.mse_history, 
+                label='Tanh Escalada', linewidth=3, color='#2ca02c', marker='s', markersize=4)
+    else:
+        # Si no hay mse_history, usar error_history
+        plt.plot(range(1, len(model_tanh_full.error_history) + 1), model_tanh_full.error_history, 
+                label='Tanh Escalada', linewidth=3, color='#2ca02c', marker='s', markersize=4)
+    
+    plt.xlabel('Época')
+    plt.ylabel('MSE')
+    plt.title('MSE vs Épocas - Comparación de Funciones de Activación Escaladas')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Configurar eje X para mostrar solo valores enteros
+    max_epochs = max(len(model_sigmoid_full.error_history), len(model_tanh_full.error_history))
+    plt.xticks(range(1, max_epochs + 1, max(1, max_epochs // 10)))
+    
+    plt.tight_layout()
+    plt.show(block=True)
+
+    # --- Métricas finales ---
+    y_pred_sigmoid = np.array([model_sigmoid_full.predict(x) for x in X_bias])
+    y_pred_tanh = np.array([model_tanh_full.predict(x) for x in X_bias])
+    
+    mse_sigmoid_final = np.mean((Y - y_pred_sigmoid) ** 2)
+    mse_tanh_final = np.mean((Y - y_pred_tanh) ** 2)
+
+    print(f"\n" + "="*50)
+    print("RESULTADOS:")
+    print("="*50)
+    print(f"MSE Final:")
+    print(f"  Sigmoid Escalada:     {mse_sigmoid_final:.6f}")
+    print(f"  Tanh Escalada:       {mse_tanh_final:.6f}")
+    
+    print(f"\nValidación Cruzada:")
+    print(f"  Sigmoid:     {np.mean(mse_sigmoid_folds):.6f} ± {np.std(mse_sigmoid_folds):.6f}")
+    print(f"  Tanh:        {np.mean(mse_tanh_folds):.6f} ± {np.std(mse_tanh_folds):.6f}")
+
+    return {
+        'sigmoid_mse': mse_sigmoid_final,
+        'tanh_mse': mse_tanh_final,
+        'cv_results': {
+            'Sigmoid Escalada': mse_sigmoid_folds,
+            'Tanh Escalada': mse_tanh_folds
+        }
+    }
+
+
+def run_advanced_comparison_analysis(csv_file_path: str, lr: float = 0.01, epochs: int = 20, beta: float = 1.0):
+    """
+    Análisis comparativo: perceptrón lineal vs no lineal con sigmoid.
+    Genera solo 3 gráficos específicos usando las utilidades de utils/.
+    """
+    print("=" * 60)
+    print("  COMPARACIÓN: PERCEPTRÓN LINEAL vs NO LINEAL (SIGMOID)")
+    print("=" * 60)
+    print(f"Hiperparámetros: η={lr}, Épocas={epochs}, β={beta}")
+
+    # --- Cargar datos ---
+    if csv_file_path.endswith('.txt'):
+        from utils.parse_csv_data import parse_digits_7x5_txt
+        X, Y = parse_digits_7x5_txt(csv_file_path)
+        print(f"Archivo de dígitos detectado: {len(X)} dígitos de {X.shape[1]} píxeles")
+    else:
+        X, Y = parse_csv_data(csv_file_path)
+        if not X:
+            return
+        X = np.array(X)
+        Y = np.array(Y)
+
+    print(f"Datos: {len(X)} muestras, {X.shape[1]} características")
+
+    # --- Normalizar características ---
+    from utils.stats import fmean, pstdev
+    cols = list(zip(*X))
+    means = [fmean(col) for col in cols]
+    stdevs = [max(1e-8, pstdev(col)) for col in cols]
+    X_normalized = np.array([[(val - m)/s for val, m, s in zip(row, means, stdevs)] for row in X])
+
+    # --- Agregar bias ---
+    X_bias = np.hstack([np.ones((X_normalized.shape[0], 1)), X_normalized])
+    n_inputs = X_bias.shape[1]
+
+    # --- Definir splitter ---
+    splitter = KFold(n_splits=5, shuffle=True, seed=42)
+
+    # --- Factories de perceptrones ---
+    def linear_factory():
+        return Perceptron(
+            n_inputs=n_inputs,
+            activation=linear_function,
+            alpha=lr,
+            max_iter=epochs,
+            training_algorithm=linear_perceptron,
+            mode="online"
+        )
+
+    def nonlinear_factory():
+        y_min, y_max = Y.min(), Y.max()
+        sigmoid_act, sigmoid_deriv = scaled_logistic_function_factory(beta, y_min, y_max)
+        range_span = max(1e-8, y_max - y_min)
+        effective_alpha = lr / range_span
+        
+        return Perceptron(
+            n_inputs=n_inputs,
+            activation=sigmoid_act,
+            activation_derivative=sigmoid_deriv,
+            alpha=effective_alpha,
+            max_iter=epochs,
+            training_algorithm=nonlinear_perceptron,
+            mode="online"
+        )
+
+    # --- Validación cruzada ---
+    print(f"\nEjecutando validación cruzada...")
+    mse_lin_folds = cross_validate_regression(linear_factory, X_bias, Y, splitter, scoring=sse_score)
+    mse_nonlin_folds = cross_validate_regression(nonlinear_factory, X_bias, Y, splitter, scoring=sse_score)
+
+    # Convertir SSE a MSE
+    mse_lin_folds = [sse / len(Y) for sse in mse_lin_folds]
+    mse_nonlin_folds = [sse / len(Y) for sse in mse_nonlin_folds]
+
+    # --- Entrenar modelos completos ---
+    print(f"\nEntrenando modelos completos...")
+    model_lin_full = linear_factory()
+    model_lin_full.fit(X_bias, Y)
+    y_pred_lin_full = np.array([model_lin_full.predict(x) for x in X_bias])
+
+    model_nonlin_full = nonlinear_factory()
+    model_nonlin_full.fit(X_bias, Y)
+    y_pred_nonlin_full = np.array([model_nonlin_full.predict(x) for x in X_bias])
+
+    # === 1️⃣ GRÁFICO 1: Mejora Porcentual ===
+    plt.figure(figsize=(10, 6))
+    
+    # Calcular mejora porcentual
+    mse_linear_mean = np.mean(mse_lin_folds)
+    mse_nonlinear_mean = np.mean(mse_nonlin_folds)
+    mejora_porcentual = ((mse_linear_mean - mse_nonlinear_mean) / mse_linear_mean) * 100
+    
+    # Crear gráfico de barras con mejora
+    labels = ['Perceptrón Lineal', 'Perceptrón No Lineal']
+    means = [mse_linear_mean, mse_nonlinear_mean]
+    stds = [np.std(mse_lin_folds), np.std(mse_nonlin_folds)]
+    colors = ['#ff7f0e', '#2ca02c']
+    
+    bars = plt.bar(labels, means, yerr=stds, capsize=5, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+    plt.ylabel('MSE (Mean Squared Error)')
+    plt.title('Comparación MSE: Lineal vs No Lineal')
+    plt.grid(axis='y', alpha=0.3)
+    
+    # Agregar valores en las barras
+    for bar, mean, std in zip(bars, means, stds):
+        plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std + 0.001,
+                f'{mean:.4f}', ha='center', va='bottom', fontweight='bold')
+    
+    # Agregar texto de mejora destacado
+    plt.text(0.5, 0.95, f'El perceptrón no lineal reduce el error en un {mejora_porcentual:.1f}% respecto al lineal',
+             transform=plt.gca().transAxes, ha='center', va='top', fontsize=14, fontweight='bold',
+             bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgreen', alpha=0.8))
+    
+    plt.tight_layout()
+    plt.show(block=True)
+
+    # === 2️⃣ GRÁFICO 2: Curvas de Entrenamiento (MSE vs Épocas) ===
+    if hasattr(model_lin_full, 'mse_history') and model_lin_full.mse_history:
+        plt.figure(figsize=(10, 6))
+        
+        # Solo gráfico completo sin zoom
+        plt.plot(range(1, len(model_lin_full.mse_history) + 1), model_lin_full.mse_history, 
+                label='Perceptrón Lineal', linewidth=3, color='#ff7f0e', marker='o', markersize=4)
+        plt.plot(range(1, len(model_nonlin_full.mse_history) + 1), model_nonlin_full.mse_history, 
+                label='Perceptrón No Lineal', linewidth=3, color='#2ca02c', marker='s', markersize=4)
+        
+        plt.xlabel('Época')
+        plt.ylabel('MSE')
+        plt.title('MSE vs Épocas - Comparación de Convergencia')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Configurar eje X para mostrar solo valores enteros
+        plt.xticks(range(1, len(model_lin_full.mse_history) + 1, max(1, len(model_lin_full.mse_history) // 10)))
+        
+        plt.tight_layout()
+        plt.show(block=True)
+        
+        # Información adicional en consola
+        print(f"\n📊 INFORMACIÓN DE CONVERGENCIA:")
+        print(f"Perceptrón Lineal:")
+        print(f"  MSE inicial: {model_lin_full.mse_history[0]:.6f}")
+        print(f"  MSE final:   {model_lin_full.mse_history[-1]:.6f}")
+        print(f"  Reducción:  {((model_lin_full.mse_history[0] - model_lin_full.mse_history[-1]) / model_lin_full.mse_history[0] * 100):.2f}%")
+        
+        print(f"\nPerceptrón No Lineal:")
+        print(f"  MSE inicial: {model_nonlin_full.mse_history[0]:.6f}")
+        print(f"  MSE final:   {model_nonlin_full.mse_history[-1]:.6f}")
+        print(f"  Reducción:  {((model_nonlin_full.mse_history[0] - model_nonlin_full.mse_history[-1]) / model_nonlin_full.mse_history[0] * 100):.2f}%")
+        
+        # Verificar si están solapadas
+        diff_final = abs(model_lin_full.mse_history[-1] - model_nonlin_full.mse_history[-1])
+        if diff_final < 1e-6:
+            print(f"\n⚠️  ADVERTENCIA: Las curvas están prácticamente solapadas (diferencia final: {diff_final:.2e})")
+        else:
+            print(f"\n✅ Las curvas son distinguibles (diferencia final: {diff_final:.6f})")
+
+    # === 3️⃣ GRÁFICO 3: Predicciones vs Valores Reales ===
+    plt.figure(figsize=(8, 8))
+    plt.scatter(Y, y_pred_lin_full, alpha=0.7, color='#ff7f0e', label='Perceptrón Lineal', s=60, edgecolors='black', linewidth=0.5)
+    plt.scatter(Y, y_pred_nonlin_full, alpha=0.7, color='#2ca02c', label='Perceptrón No Lineal', s=60, edgecolors='black', linewidth=0.5)
+    plt.plot([Y.min(), Y.max()], [Y.min(), Y.max()], 'k--', label='y=x (Predicción Perfecta)', linewidth=3)
+    plt.xlabel('Valores Reales')
+    plt.ylabel('Predicciones')
+    plt.title('Predicciones vs Valores Reales')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show(block=True)
+
+    # --- Métricas finales ---
+    mse_linear_final = np.mean((Y - y_pred_lin_full) ** 2)
+    mse_nonlinear_final = np.mean((Y - y_pred_nonlin_full) ** 2)
+    improvement = ((mse_linear_final - mse_nonlinear_final) / mse_linear_final) * 100
+
+    print(f"\n" + "="*50)
+    print("RESULTADOS:")
+    print("="*50)
+    print(f"MSE Final:")
+    print(f"  Perceptrón Lineal:     {mse_linear_final:.6f}")
+    print(f"  Perceptrón No Lineal: {mse_nonlinear_final:.6f}")
+    print(f"  Mejora:               {improvement:+.2f}%")
+    
+    print(f"\nValidación Cruzada:")
+    print(f"  Lineal:     {np.mean(mse_lin_folds):.6f} ± {np.std(mse_lin_folds):.6f}")
+    print(f"  No Lineal:  {np.mean(mse_nonlin_folds):.6f} ± {np.std(mse_nonlin_folds):.6f}")
+
+    return {
+        'linear_mse': mse_linear_final,
+        'nonlinear_mse': mse_nonlinear_final,
+        'improvement': improvement,
+        'cv_results': {
+            'Perceptrón Lineal': mse_lin_folds,
+            'Perceptrón No Lineal': mse_nonlin_folds
+        }
+    }
+
+
 def run(csv_file_path: str, model_type: str):
     """Maps the model type to the corresponding runner function."""
     model_type = model_type.lower()
@@ -234,6 +581,10 @@ def run(csv_file_path: str, model_type: str):
         run_nonlinear_perceptron(csv_file_path)
     elif model_type == "experiment":
         run_perceptron_experiment(csv_file_path)
+    elif model_type == "advanced":
+        run_advanced_comparison_analysis(csv_file_path)
+    elif model_type == "activation_comparison":
+        run_activation_comparison_experiment(csv_file_path)
     elif model_type in ("baseline_lineal", "exp1"):
         run_experimento1_baseline_lineal(csv_file_path, lr=0.01, epochs=50)
     elif model_type in ("boxplot_cv", "exp4"):
@@ -242,5 +593,5 @@ def run(csv_file_path: str, model_type: str):
                                         beta=1.0,seed= 42)
 
     else:
-        print(f"Error: Model type '{model_type}' not recognized. Use 'lineal' or 'no_lineal'.")
+        print(f"Error: Model type '{model_type}' not recognized. Use 'lineal', 'no_lineal', 'experiment', 'advanced', or 'activation_comparison'.")
 

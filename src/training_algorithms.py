@@ -122,6 +122,11 @@ def nonlinear_perceptron(perceptron, x, y, min_error_threshold, mode="online", b
     def convergence_criterion(sse, threshold):
         return sse < threshold
 
+    def on_epoch_end(epoch, sse, n_samples, model):
+        # save SSE and MSE for graphs (same as linear perceptron)
+        model.sse_history.append(float(sse))
+        model.mse_history.append(float(sse) / float(n_samples))
+
     return train_base(
         perceptron, x, y,
         update_rule_with_derivative,
@@ -129,5 +134,6 @@ def nonlinear_perceptron(perceptron, x, y, min_error_threshold, mode="online", b
         convergence_threshold=min_error_threshold,
         mode=mode,
         batch_size=batch_size,
-        shuffle=shuffle
+        shuffle=shuffle,
+        on_epoch_end=on_epoch_end
     )
