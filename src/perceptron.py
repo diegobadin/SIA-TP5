@@ -18,6 +18,9 @@ class Perceptron:
         self.batch_size = batch_size
         self.shuffle = shuffle
 
+        self.sse_history = []
+        self.mse_history = []
+
     def predict(self, x):
         """
             Calculates the weighted sum (excitation) manually, then applies activation.
@@ -36,3 +39,12 @@ class Perceptron:
             raise ValueError("Debe especificarse un algoritmo de entrenamiento.")
         return self.training_algorithm(self, x, y, self.error_threshold,
                                        mode=self.mode, batch_size=self.batch_size, shuffle=self.shuffle)
+
+    def predict_linear(self, x):
+        """
+        Devuelve la activación lineal h = W·X (usado p/ MSE del modelo lineal (experimento 1)).
+        """
+        excitation = 0
+        for w_i, x_i in zip(self.weights, x):
+            excitation += w_i * x_i
+        return excitation
