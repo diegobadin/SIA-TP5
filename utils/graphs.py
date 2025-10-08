@@ -3,7 +3,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 
-from utils.metrics import accuracy_score
+from utils.metrics import accuracy_score, save_confusion_counts, save_confusion_with_heatmap
 from utils.noise import add_noise
 
 # ===================== Config de gráficos =====================
@@ -113,36 +113,48 @@ def plot_decision_boundary(model, X, Y, title):
 
 
 def plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=10, shape=(7, 5)):
-    plt.figure(figsize=(12, len(noise_levels) * 3))
     n_show_digits = min(n_show, len(X))
+    n_rows = len(noise_levels)
+    n_cols = n_show_digits * 2
+
+    plt.figure(figsize=(12, n_rows * 1.5))  # Reducimos el alto de cada fila
 
     for i, noise_level in enumerate(noise_levels):
         X_noisy_level = X_noisy_all[i]
         for j in range(n_show_digits):
-            plt.subplot(len(noise_levels), n_show_digits * 2, i * n_show_digits * 2 + j * 2 + 1)
-            plt.imshow((X[j] >= 0).astype(int).reshape(shape), cmap='gray_r')
-            if i == 0:
-                plt.title(f"{j}")
-            plt.axis('off')
-
             # Con ruido
-            plt.subplot(len(noise_levels), n_show_digits * 2, i * n_show_digits * 2 + j * 2 + 2)
+            plt.subplot(n_rows, n_cols, i * n_cols + j * 2 + 2)
             plt.imshow((X_noisy_level[j] >= 0.5).astype(int).reshape(shape), cmap='gray_r')
             plt.axis('off')
 
-    plt.suptitle("Dígitos originales (izq) y con ruido (der) por nivel de ruido")
-    plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+            # Solo para la primera fila, mostrar los números arriba
+            if i == 0:
+                plt.title(f"{j}", fontsize=10)
+
+    plt.suptitle("Dígitos originales (izq) y con ruido (der) por nivel de ruido", fontsize=12)
+    plt.subplots_adjust(hspace=0.1, wspace=0.05)  # Reducimos espacio entre filas y columnas
     plt.show(block=False)
 
 
-def plot_accuracy_vs_noise(accuracies, noise_levels):
-    plt.figure()
-    plt.plot([n * 100 for n in noise_levels], accuracies, marker='o')
+def plot_accuracy_vs_noise(accuracies, noise_levels, fname="accuracy_vs_noise.png"):
+    plt.figure(figsize=(7, 5))
+    noise_percent = [n * 100 for n in noise_levels]
+
+    plt.plot(noise_percent, accuracies, marker='o', linewidth=2)
+    for x, y in zip(noise_percent, accuracies):
+        plt.text(x, y + 0.01, f"{y:.2f}", ha='center', fontsize=9)
+
     plt.title("Precisión del modelo vs Nivel de ruido")
     plt.xlabel("Nivel de ruido (%)")
     plt.ylabel("Accuracy")
-    plt.grid(True)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+
     plt.show(block=False)
+
 
 
 def evaluate_digits_with_noise(model, X, Y, noise_levels=None, n_show=10, shape=(7, 5)):
@@ -162,10 +174,27 @@ def evaluate_digits_with_noise(model, X, Y, noise_levels=None, n_show=10, shape=
         accuracies.append(acc)
         X_noisy_all.append(X_noisy)
 
+        filepath = f"results/confusion_noise_{int(noise_level * 100)}.txt"
+        class_labels = list(range(10))  # o nombres de tus dígitos si querés
+        save_confusion_with_heatmap(
+            y_true=Y,
+            y_pred=predictions,
+            filepath_prefix=f"results/confusion_noise_{int(noise_level * 100)}",
+            comment=f"Nivel de ruido: {noise_level * 100:.0f}%",
+            class_labels=class_labels
+        )
+
         print(f"Ruido {int(noise_level * 100)}% → Precisión: {acc:.3f}")
+        print(f"Resultados guardados en {filepath}\n")
 
     plot_digits_with_noise(X, X_noisy_all, noise_levels, n_show=n_show, shape=shape)
     plot_accuracy_vs_noise(accuracies, noise_levels)
+
+    results = {
+        "noise_levels": noise_levels,
+        "accuracies": accuracies
+    }
+    return results
 
 def plot_accuracy_folds(accuracies_dict, title="Accuracy por fold"):
     folds = np.arange(1, len(list(accuracies_dict.values())[0]) + 1)

@@ -170,49 +170,59 @@ def run_ex3_digitos():
     Y = np.eye(10, dtype=float)[labels]
     in_dim, out_dim = X.shape[1], Y.shape[1]
 
-    model = MLP(
-        layer_sizes=[in_dim, 32, 16, out_dim],
-        activations=[TANH, TANH, SOFTMAX],
-        loss=CrossEntropyLoss(),
-        optimizer=Adam(lr=1e-3),
-        seed=42,
-        w_init_scale=0.2
-    )
+        model = MLP(
+            layer_sizes=[in_dim, 32, 16, out_dim],
+            activations=[TANH, TANH, SOFTMAX],
+            loss=CrossEntropyLoss(),
+            optimizer=Adam(lr=1e-3),
+            seed=42,
+            w_init_scale=0.2
+        )
 
-    # Split holdout estratificado 70/30 (rinde un único fold). Útil para graficar train/test.
-    # splitter = HoldoutSplit(test_ratio=0.3, shuffle=True, seed=123, stratify=True)
+        # Split holdout estratificado 70/30 (rinde un único fold). Útil para graficar train/test.
+        # splitter = HoldoutSplit(test_ratio=0.3, shuffle=True, seed=123, stratify=True)
 
-    # splitter = KFold(n_splits=5, shuffle=True, seed=123)
+        # splitter = KFold(n_splits=5, shuffle=True, seed=123)
 
-    splitter = StratifiedKFold(n_splits=5, shuffle=True,
-                               seed=123)  # Aca se le pase el numero que le pase va a dividir en dos, lo que se puede hacer el ir duplicando la data para que pueda ir agrupando mas
+        splitter = StratifiedKFold(n_splits=5, shuffle=True, seed=123)  # Aca se le pase el numero que le pase va a dividir en dos, lo que se puede hacer el ir duplicando la data para que pueda ir agrupando mas
 
-    # --- Curvas con UN fold (para graficar train/test)
-    tr_idx, te_idx = next(splitter.split(X, Y))
-    Xtr, Ytr = X[tr_idx], Y[tr_idx]
-    Xte, Yte = X[te_idx], Y[te_idx]
+        # --- Curvas con UN fold (para graficar train/test)
+        tr_idx, te_idx = next(splitter.split(X, Y))
+        Xtr, Ytr = X[tr_idx], Y[tr_idx]
+        Xte, Yte = X[te_idx], Y[te_idx]
 
-    losses, tr_accs, te_accs = train_with_acc_curves(
-        model, Xtr, Ytr, Xte, Yte, epochs=50, batch_size=16, shuffle=True, verbose=True
-    )
-    plot_loss(losses, loss_name=type(model.loss).__name__, title="Digits - Loss vs Época", fname="digits_loss.png")
-    plot_acc_curves(tr_accs, te_accs, title="Digits - Accuracy vs Época", fname="digits_acc.png")
+        losses, tr_accs, te_accs = train_with_acc_curves(
+            model, Xtr, Ytr, Xte, Yte, epochs=50, batch_size=16, shuffle=True, verbose=True
+        )
+        plot_loss(losses, loss_name=type(model.loss).__name__, title="Digits - Loss vs Época", fname="digits_loss.png")
+        plot_acc_curves(tr_accs, te_accs, title="Digits - Accuracy vs Época", fname="digits_acc.png")
 
-    # OJO: StratifiedKFold se puede usar nomás cuando tenemos más de una sola muestra de test por dígito
-    res = cross_validate(
-        model_factory=lambda: MLP([in_dim, 32, 16, out_dim],
-                                  [TANH, TANH, SOFTMAX],
-                                  CrossEntropyLoss(), Adam(lr=1e-3),
-                                  seed=42, w_init_scale=0.2),
-        X=X, Y=Y,
-        splitter=splitter,
-        fit_kwargs=dict(epochs=50, batch_size=16, verbose=False),
-        scoring=accuracy_score,
-    )
-    title = f"Digits · {splitter}"
-    plot_kfold_accuracies(res["folds"], title=title)
+        # OJO: StratifiedKFold se puede usar nomás cuando tenemos más de una sola muestra de test por dígito
+        res = cross_validate(
+            model_factory=lambda: MLP([in_dim, 32, 16, out_dim],
+                                      [TANH, TANH, SOFTMAX],
+                                      CrossEntropyLoss(), Adam(lr=1e-3),
+                                      seed=42, w_init_scale=0.2),
+            X=X, Y=Y,
+            splitter=splitter,
+            fit_kwargs=dict(epochs=50, batch_size=16, verbose=False),
+            scoring=accuracy_score,
+        )
+        title = f"Digits · {splitter}"
+        plot_kfold_accuracies(res["folds"], title=title)
 
-    # --- Evaluación con ruido ---
-    evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.3, 0.5], n_show=10)
+        '''
+        # --- Experimento con ruido ---
+        model = MLP(
+            layer_sizes=[in_dim, 20, out_dim],
+            activations=[TANH, SOFTMAX],
+            loss=CrossEntropyLoss(),
+            optimizer=Adam(lr=1e-3),
+            seed=42,
+            w_init_scale=0.2
+        )
+        
+        evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.25, 0.5], n_show=10)
+        '''
 
     plt.show()
