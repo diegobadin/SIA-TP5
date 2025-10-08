@@ -1,7 +1,9 @@
 import os
+from typing import Optional, Dict
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 from utils.metrics import accuracy_score, save_confusion_counts, save_confusion_with_heatmap
 from utils.noise import add_noise
@@ -308,3 +310,85 @@ def plot_xor_non_linear(x, y):
     plt.grid(True)
     plt.legend()
     plt.show()
+
+
+
+def plot_multiple_acc_curves(accs_dict: dict, title: str, fname: Optional[str] = "acc_comparison.png"):
+    plt.figure(figsize=(10, 6))
+
+    # Asumimos que todas las listas tienen la misma longitud (20 épocas)
+    # Usamos list(accs_dict.values())[0] para obtener la primera lista y su longitud
+    epochs = range(1, len(list(accs_dict.values())[0]) + 1)
+
+    for arch, accs in accs_dict.items():
+        # Incluye el resultado final en la etiqueta para mejor análisis
+        plt.plot(epochs, accs, label=f"Arquitectura {arch} (Final: {accs[-1]:.4f})")
+
+    plt.xlabel("Época")
+    plt.ylabel("Accuracy de Validación")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+    plt.show(block=False)
+
+
+def plot_multiple_loss(losses_dict: dict, title: str, fname: Optional[str] = "loss_comparison.png"):
+    plt.figure(figsize=(10, 6))
+
+    # Asumimos que todas las listas tienen la misma longitud (20 épocas)
+    # Usamos list(losses_dict.values())[0] para obtener la primera lista y su longitud
+    epochs = range(1, len(list(losses_dict.values())[0]) + 1)
+
+    for arch, losses in losses_dict.items():
+        # Incluye el resultado final en la etiqueta para mejor análisis
+        plt.plot(epochs, losses, label=f"Arquitectura {arch} (Final: {losses[-1]:.4f})")
+
+    plt.xlabel("Época")
+    plt.ylabel("Loss (Cross Entropy)")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+    plt.show(block=False)
+
+
+def plot_time_table(mean_times: Dict[str, float]):
+    if not mean_times:
+        print("No hay datos de tiempo para graficar.")
+        return
+
+    # Preparar datos: ordenar por arquitectura (A, B, C...) o por tiempo (opcional)
+    architectures = list(mean_times.keys())
+    times = list(mean_times.values())
+
+    # Crear el gráfico
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    # Generar barras
+    bars = ax.bar(architectures, times, color=['skyblue', 'lightcoral', 'lightgreen'])
+
+    # Añadir el valor del tiempo encima de cada barra
+    for bar in bars:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, yval + 0.05,
+                f'{yval:.2f} s', ha='center', va='bottom', fontsize=10)
+
+    # Configuración de los ejes y título
+    ax.set_title("Tiempo Promedio de Entrenamiento por Arquitectura (3 Runs)")
+    ax.set_xlabel("Arquitectura")
+    ax.set_ylabel("Tiempo Promedio (Segundos)")
+
+    # Ajustar límite del eje Y para que los valores sean visibles
+    ax.set_ylim(0, max(times) * 1.15)
+
+    # Guardar el gráfico
+    plt.savefig("mnist_avg_training_time_barplot.png")
+    plt.close(fig)
+    print("Gráfico de tiempo promedio guardado como 'mnist_avg_training_time_barplot.png'.")

@@ -64,7 +64,12 @@ def main():
         run_experiment("ex3",item)
 
     elif experiment_name == "ex4":
-        run_experiment("ex4")
+        if len(sys.argv) < 2:
+            item = sys.argv[1].lower()
+            if item == "experiment":
+                run_experiment("ex4", True)
+        else:
+            run_experiment("ex4", False)
 
     else:
         print(f"Experiment '{experiment_name}' not recognized.")
