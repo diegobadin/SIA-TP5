@@ -279,3 +279,55 @@ def plot_xor_non_linear(x, y):
     plt.grid(True)
     plt.legend()
     plt.show()
+
+
+def train_with_error_and_acc_curves(model, Xtr, Ytr, Xte, Yte,
+                                    epochs=200, batch_size=1,
+                                    shuffle=True, verbose=False):
+    """
+    Entrena por épocas y devuelve MSE_train, MSE_test, ACC_train, ACC_test por época.
+    MSE se calcula con SSE/N usando las predicciones del modelo (sin depender del .loss interno).
+    """
+    from utils.metrics import sse_score, accuracy_score
+
+    mse_tr, mse_te, acc_tr, acc_te = [], [], [], []
+    Ntr = len(Xtr); Nte = len(Xte)
+
+    for ep in range(epochs):
+        # una época de entrenamiento
+        model.fit(Xtr, Ytr, epochs=1, batch_size=batch_size, shuffle=shuffle, verbose=False)
+
+        # predicciones
+        yhat_tr = model.predict(Xtr)
+        yhat_te = model.predict(Xte)
+
+        # métricas
+        mse_tr.append(sse_score(Ytr, yhat_tr) / max(1, Ntr))
+        mse_te.append(sse_score(Yte, yhat_te) / max(1, Nte))
+        acc_tr.append(accuracy_score(Ytr, yhat_tr))
+        acc_te.append(accuracy_score(Yte, yhat_te))
+
+        if verbose and ((ep + 1) % max(1, epochs // 10) == 0):
+            print(f"[{ep+1:03d}/{epochs}] mse_tr={mse_tr[-1]:.4f}  mse_te={mse_te[-1]:.4f}  "
+                  f"acc_tr={acc_tr[-1]:.3f}  acc_te={acc_te[-1]:.3f}")
+
+    return mse_tr, mse_te, acc_tr, acc_te
+
+
+def plot_two_loss_curves(train_loss, test_loss, title="MSE vs Época", fname=None):
+    plt.figure()
+    plt.plot(range(1, len(train_loss)+1), train_loss, label="Train")
+    plt.plot(range(1, len(test_loss)+1), test_loss,  label="Test")
+    plt.xlabel("Época"); plt.ylabel("MSE"); plt.title(title)
+    plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)
+
+def plot_two_acc_curves(train_accs, test_accs, title="Accuracy vs Época", fname=None):
+    plt.figure()
+    plt.plot(range(1, len(train_accs)+1), train_accs, label="Train")
+    plt.plot(range(1, len(test_accs)+1),  test_accs,  label="Test")
+    plt.xlabel("Época"); plt.ylabel("Accuracy"); plt.title(title)
+    plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
+    if SAVE_FIGS and fname:
+        plt.savefig(os.path.join(OUT_DIR, fname), dpi=140)

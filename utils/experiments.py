@@ -1,12 +1,11 @@
-# ex2.py
 import numpy as np
 import matplotlib.pyplot as plt
-
 from src.perceptron import Perceptron
 from src.training_algorithms import linear_perceptron
 from utils.activations import linear_function
 from utils.parse_csv_data import parse_csv_data
 
+# === Exercise 2 ===
 
 def _add_bias(X: np.ndarray) -> np.ndarray:
     ones = np.ones((X.shape[0], 1))

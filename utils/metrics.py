@@ -3,9 +3,6 @@ from typing import Callable, Optional, Any, Dict
 import os
 import numpy as np
 
-from src.mlp.mlp import MLP
-
-
 def accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     if y_pred.ndim == 1 or y_pred.shape[1] == 1:
         return float(np.mean((y_pred.ravel() > 0.5).astype(int) == y_true.ravel().astype(int)))
