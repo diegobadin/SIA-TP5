@@ -1,5 +1,10 @@
 from typing import Callable, Optional, Any, Dict
 
+from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+
+
 import os
 import numpy as np
 
@@ -141,3 +146,58 @@ def save_confusion_counts(
         fh.write("\n".join(lines) + "\n")
 
     return counts
+
+
+
+def save_confusion_with_heatmap(y_true, y_pred, filepath_prefix, comment=None, class_labels=None):
+    """
+    Guarda la matriz de confusión en un .txt y genera un heatmap en .png.
+
+    Args:
+        y_true: etiquetas verdaderas (np.ndarray)
+        y_pred: predicciones del modelo (np.ndarray)
+        filepath_prefix: prefijo de archivo, se agregará _matrix.txt y _heatmap.png
+        comment: comentario opcional
+        class_labels: lista con nombres de las clases
+    Returns:
+        La matriz de confusión
+    """
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    # Convertir one-hot a etiquetas si es necesario
+    if y_true.ndim == 2 and y_true.shape[1] > 1:
+        y_true = np.argmax(y_true, axis=1)
+    if y_pred.ndim == 2 and y_pred.shape[1] > 1:
+        y_pred = np.argmax(y_pred, axis=1)
+
+    cm = confusion_matrix(y_true, y_pred)
+    acc = np.mean(y_true == y_pred)
+
+    # Crear carpeta si no existe
+    directory = os.path.dirname(filepath_prefix)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    # Guardar en txt
+    txt_path = filepath_prefix + "_matrix.txt"
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write("Matriz de confusión:\n")
+        np.savetxt(f, cm, fmt="%d")
+        f.write(f"\nAccuracy: {acc:.4f}\n")
+        if comment:
+            f.write(f"# {comment}\n")
+
+    # Generar heatmap
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                xticklabels=class_labels, yticklabels=class_labels)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Matriz de confusión - Accuracy: {acc:.4f}")
+    plt.tight_layout()
+    png_path = filepath_prefix + "_heatmap.png"
+    plt.savefig(png_path)
+    plt.close()
+
+    return cm
