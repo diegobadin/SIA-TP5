@@ -175,8 +175,19 @@ def run(item: str):
         title = f"Digits · {splitter}"
         plot_kfold_accuracies(res["folds"], title=title)
 
-        # --- Evaluación con ruido ---
-        evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.3, 0.5], n_show=10)
+        '''
+        # --- Experimento con ruido ---
+        model = MLP(
+            layer_sizes=[in_dim, 20, out_dim],
+            activations=[TANH, SOFTMAX],
+            loss=CrossEntropyLoss(),
+            optimizer=Adam(lr=1e-3),
+            seed=42,
+            w_init_scale=0.2
+        )
+        
+        evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.25, 0.5], n_show=10)
+        '''
 
         plt.show()
 
