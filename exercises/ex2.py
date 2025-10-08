@@ -9,7 +9,7 @@ from utils.activations import (
     scaled_logistic_function_factory,
     scaled_tanh_function_factory, tanh_function_factory,
 )
-from utils.experiments import run_experimento1_baseline_lineal
+from utils.experiments import run_experimento1_baseline_lineal, run_ex2_experimento4_cv_boxplot
 from utils.graphs import plot_accuracy_folds, plot_predictions_vs_real, plot_absolute_error
 from utils.metrics import cross_validate_regression, sse_score
 from utils.parse_csv_data import parse_csv_data
@@ -235,7 +235,12 @@ def run(csv_file_path: str, model_type: str):
     elif model_type == "experiment":
         run_perceptron_experiment(csv_file_path)
     elif model_type in ("baseline_lineal", "exp1"):
-        run_experimento1_baseline_lineal(csv_file_path, lr=0.01, epochs=75)
+        run_experimento1_baseline_lineal(csv_file_path, lr=0.01, epochs=50)
+    elif model_type in ("boxplot_cv", "exp4"):
+        run_ex2_experimento4_cv_boxplot(csv_file_path,
+                                        k=5, eta=0.01, epochs=200,
+                                        beta=1.0,seed= 42)
+
     else:
         print(f"Error: Model type '{model_type}' not recognized. Use 'lineal' or 'no_lineal'.")
 
