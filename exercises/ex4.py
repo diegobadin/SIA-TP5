@@ -131,11 +131,9 @@ def make_experiment_model(arch_key, seed):
 def run_depth_experiment(x_train, y_train, y_train_labels, seed, x_test, y_test):
     ARCHITECTURES_TO_RUN = ["A", "B", "C"]
     NUM_RUNS = 3
-    comparison_results = {}  # va_accs para gráfico comparativo
-    comparison_losses = {}  # losses para gráfico comparativo
 
-    comparison_results_mean = {}  # Promedio de va_accs para gráfico comparativo
-    comparison_losses_mean = {}  # Promedio de losses para gráfico comparativo
+    comparison_results_mean = {}
+    comparison_losses_mean = {}
     mean_times = {}
 
     # Usar un Split ÚNICO (80% Train, 20% Validation)

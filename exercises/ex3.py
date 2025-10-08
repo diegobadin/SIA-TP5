@@ -18,8 +18,8 @@ from src.mlp.optimizers import (
 )
 from utils.graphs import plot_loss, plot_acc_curves, train_with_acc_curves, plot_kfold_accuracies, \
     plot_decision_boundary, evaluate_digits_with_noise, plot_two_loss_curves, plot_two_acc_curves, \
-    train_with_error_and_acc_curves
-from utils.metrics import cross_validate, accuracy_score
+    train_with_error_and_acc_curves, plot_multiple_acc_curves, plot_multiple_loss
+from utils.metrics import cross_validate, accuracy_score, save_confusion_with_heatmap, save_confusion_counts
 
 from utils.parse_csv_data import parse_digits_7x5_txt
 from utils.splits import KFold, StratifiedKFold, HoldoutSplit
@@ -162,6 +162,9 @@ def run_ex3_paridad(
     )
     title = f"Parity · {splitter}"
     plot_kfold_accuracies(res["folds"], title=title)
+
+    run_paridad_complexity_experiment(X, Y)
+
     plt.show()
 
 
@@ -213,19 +216,7 @@ def run_ex3_digitos():
     title = f"Digits · {splitter}"
     plot_kfold_accuracies(res["folds"], title=title)
 
-    '''
-    # --- Experimento con ruido ---
-    model = MLP(
-        layer_sizes=[in_dim, 20, out_dim],
-        activations=[TANH, SOFTMAX],
-        loss=CrossEntropyLoss(),
-        optimizer=Adam(lr=1e-3),
-        seed=42,
-        w_init_scale=0.2
-    )
-    
-    evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.25, 0.5], n_show=10)
-    '''
+    run_noise_experiment(X, Y, in_dim=in_dim, out_dim=out_dim)
 
     plt.show()
 
@@ -412,3 +403,127 @@ def run_architecture_comparison_experiment():
         print("✅ Arquitectura B muestra mejor equilibrio complejidad-generalización")
     
     return results
+
+
+ARCHITECTURES = {
+    "A": [35, 5, 1],
+    "B": [35, 10, 1],
+    "C": [35, 10, 5, 1]
+}
+
+
+def make_model(arch_key, seed, lr):  # Adaptamos make_model
+    layer_sizes = ARCHITECTURES[arch_key]
+
+    num_hidden_layers = len(layer_sizes) - 2
+    activations = [TANH] * num_hidden_layers + [SIGMOID]
+
+    return MLP(
+        layer_sizes=layer_sizes,
+        activations=activations,
+        loss=CrossEntropyLoss(),
+        optimizer=Adam(lr=lr),
+        seed=seed,
+        w_init_scale=0.2
+    )
+
+def run_noise_experiment(X, Y, in_dim, out_dim):
+    # --- Experimento con ruido ---
+    model = MLP(
+        layer_sizes=[in_dim, 20, out_dim],
+        activations=[TANH, SOFTMAX],
+        loss=CrossEntropyLoss(),
+        optimizer=Adam(lr=1e-3),
+        seed=42,
+        w_init_scale=0.2
+    )
+
+    splitter = StratifiedKFold(n_splits=5, shuffle=True, seed=123)  # Aca se le pase el numero que le pase va a dividir en dos, lo que se puede hacer el ir duplicando la data para que pueda ir agrupando mas
+
+    # --- Curvas con UN fold (para graficar train/test)
+    tr_idx, te_idx = next(splitter.split(X, Y))
+    Xtr, Ytr = X[tr_idx], Y[tr_idx]
+    Xte, Yte = X[te_idx], Y[te_idx]
+
+    losses, tr_accs, te_accs = train_with_acc_curves(
+        model, Xtr, Ytr, Xte, Yte, epochs=50, batch_size=16, shuffle=True, verbose=True
+    )
+
+    evaluate_digits_with_noise(model, X, Y, noise_levels=[0.0, 0.1, 0.25, 0.5], n_show=10)
+
+
+
+def run_paridad_complexity_experiment(X, Y, epochs=30, lr=0.05, seed=42):
+    ARCHITECTURES_TO_RUN = ["A", "B", "C"]
+
+    # Estructuras para los gráficos comparativos (necesitamos Train Loss, Test Loss y Test Acc)
+    comp_test_acc = {}
+    comp_train_loss = {}
+    comp_test_loss = {}
+
+    # Usar un Holdout Split 70/30 (el mismo de tu código)
+    splitter = HoldoutSplit(test_ratio=0.3, shuffle=True, seed=123, stratify=True)
+    tr_idx, te_idx = next(splitter.split(X, Y))
+    Xtr, Ytr = X[tr_idx], Y[tr_idx]
+    Xte, Yte = X[te_idx], Y[te_idx]  # Xte/Yte es el set de Validación/Test del Holdout
+
+    print("--- Iniciando Experimento 3: Sensibilidad a la Complejidad ---")
+
+    for arch_key in ARCHITECTURES_TO_RUN:
+        print(f"\n[Modelo {arch_key}] {ARCHITECTURES[arch_key]}")
+
+        # 1. Crear modelo con Adam, lr=0.05
+        model = make_model(arch_key, seed, lr)
+
+        # 2. Entrenar y obtener curvas
+        losses_tr, losses_te, acc_tr, acc_te = train_with_error_and_acc_curves(
+            model, Xtr, Ytr, Xte, Yte,
+            epochs=epochs,
+            batch_size=1,  # Usamos batch_size=1 (SGD) para este experimento
+            shuffle=True,
+            verbose=False
+        )
+
+        # 3. Guardar curvas para la comparación
+        comp_test_acc[arch_key] = acc_te
+        comp_train_loss[arch_key] = losses_tr
+        comp_test_loss[arch_key] = losses_te
+
+        # --- 4. GRAFICADO INDIVIDUAL (Crucial para el análisis de C) ---
+        # Curvas ACC y Loss individuales (las que ya tienes, pero renombradas)
+        plot_two_acc_curves(acc_tr, acc_te, title=f"Paridad - Acc. (Arch. {arch_key})",
+                            fname=f"paridad_acc_{arch_key}.png")
+        plot_two_loss_curves(losses_tr, losses_te, title=f"Paridad - Loss (Arch. {arch_key})",
+                             fname=f"paridad_loss_{arch_key}.png")
+
+        # Matriz de Confusión (En el set de Test Xte/Yte del Holdout)
+        preds_te = model.predict(Xte)
+        final_acc = acc_te[-1]
+
+        save_confusion_counts(
+            y_true=Yte,
+            y_pred=preds_te,
+            filepath=f"results/confusion_counts_paridad_arch_{arch_key}_test.txt",
+            positive_label=1,  # 1=Impar (por defecto), 0=Par
+            threshold=0.5,
+            comment=f"Arquitectura {arch_key} en Test. Acc: {final_acc:.4f}"
+        )
+
+    # --- 5. GRAFICADO COMPARATIVO FINAL ---
+
+    # a. Comparación de Accuracy (Test)
+    plot_multiple_acc_curves(comp_test_acc,
+                             title="Paridad - Comparación de Accuracy (Test) vs Complejidad",
+                             fname="paridad_comp_acc.png")
+
+    # b. Comparación de Pérdida (Train)
+    plot_multiple_loss(comp_train_loss,
+                       title="Paridad - Comparación de Loss (Train) vs Complejidad",
+                       fname="paridad_comp_loss_train.png")
+
+    # c. Comparación de Pérdida (Test)
+    plot_multiple_loss(comp_test_loss,
+                       title="Paridad - Comparación de Loss (Test) vs Complejidad",
+                       fname="paridad_comp_loss_test.png")
+
+    print("\n--- Experimento de Complejidad Finalizado ---")
