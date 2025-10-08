@@ -34,8 +34,10 @@ def run(item: str):
         run_ex3_paridad()
     elif item == "digits":
         run_ex3_digitos()
+    elif item == "architecture_comparison":
+        run_architecture_comparison_experiment()
     else:
-        print("Uso: python main.py ex3 <xor | parity | digits | exp1 >")
+        print("Uso: python main.py ex3 <xor | parity | digits | architecture_comparison>")
 
 
 def run_ex3_xor():
@@ -226,3 +228,187 @@ def run_ex3_digitos():
     '''
 
     plt.show()
+
+
+def run_architecture_comparison_experiment():
+    """
+    Experimento: Comparación de arquitecturas MLP para reconocimiento de dígitos
+    Compara 3 arquitecturas diferentes para estudiar el trade-off entre complejidad y generalización.
+    """
+    print("=" * 70)
+    print("  EXPERIMENTO: COMPARACIÓN DE ARQUITECTURAS MLP")
+    print("=" * 70)
+    
+    # Cargar datos
+    X, labels = parse_digits_7x5_txt("data/TP3-ej3-digitos_extra.txt")
+    # Escalar a [-1,1] para TANH
+    X = X * 2.0 - 1.0
+    Y = np.eye(10, dtype=float)[labels]
+    in_dim, out_dim = X.shape[1], Y.shape[1]
+    
+    print(f"Datos: {len(X)} dígitos, {in_dim} características, {out_dim} clases")
+        
+    # Definir arquitecturas
+    architectures = {
+        'A': [in_dim, 10, out_dim],
+        'B': [in_dim, 20, out_dim], 
+        'C': [in_dim, 30, 15, out_dim]
+    }
+    
+    # Hiperparámetros (ajustados para dataset pequeño)
+    lr = 0.05
+    epochs = 50 
+    n_runs = 3
+    
+    print(f"Hiperparámetros: η={lr}, Épocas={epochs}, Runs={n_runs}")
+    print(f"Arquitecturas: A={architectures['A']}, B={architectures['B']}, C={architectures['C']}")
+    
+    # Splitter para train/test (sin estratificación por el tamaño pequeño del dataset)
+    splitter = HoldoutSplit(test_ratio=0.3, shuffle=True, seed=42, stratify=False)
+    tr_idx, te_idx = next(splitter.split(X, Y))
+    Xtr, Ytr = X[tr_idx], Y[tr_idx]
+    Xte, Yte = X[te_idx], Y[te_idx]
+    
+    print(f"Split: {len(Xtr)} train, {len(Xte)} test")
+    
+    # Almacenar resultados
+    results = {}
+    
+    for arch_name, layer_sizes in architectures.items():
+        print(f"\n{'='*20} Arquitectura {arch_name} {layer_sizes} {'='*20}")
+        
+        # Definir activaciones según la arquitectura
+        if len(layer_sizes) == 3:  # A y B: [input, hidden, output]
+            activations = [TANH, SOFTMAX]
+        else:  # C: [input, hidden1, hidden2, output]
+            activations = [TANH, TANH, SOFTMAX]
+        
+        # Almacenar accuracy por época para cada run
+        train_accs_runs = []
+        test_accs_runs = []
+        
+        for run in range(n_runs):
+            print(f"\nRun {run + 1}/{n_runs}")
+            
+            # Crear modelo con nueva semilla para cada run
+            model = MLP(
+                layer_sizes=layer_sizes,
+                activations=activations,
+                loss=CrossEntropyLoss(),
+                optimizer=Adam(lr=lr),
+                seed=42 + run,  # Diferente semilla por run
+                w_init_scale=0.2
+            )
+            
+            # Entrenar y obtener curvas de accuracy
+            losses, tr_accs, te_accs = train_with_acc_curves(
+                model, Xtr, Ytr, Xte, Yte,
+                epochs=epochs, batch_size=16, shuffle=True, verbose=False
+            )
+            
+            train_accs_runs.append(tr_accs)
+            test_accs_runs.append(te_accs)
+            
+            print(f"  Train Acc Final: {tr_accs[-1]:.4f}")
+            print(f"  Test Acc Final:  {te_accs[-1]:.4f}")
+        
+        # Calcular promedio por época
+        train_accs_avg = np.mean(train_accs_runs, axis=0)
+        test_accs_avg = np.mean(test_accs_runs, axis=0)
+        
+        # Calcular desviación estándar
+        train_accs_std = np.std(train_accs_runs, axis=0)
+        test_accs_std = np.std(test_accs_runs, axis=0)
+        
+        results[arch_name] = {
+            'train_acc_avg': train_accs_avg,
+            'test_acc_avg': test_accs_avg,
+            'train_acc_std': train_accs_std,
+            'test_acc_std': test_accs_std,
+            'layer_sizes': layer_sizes
+        }
+        
+        print(f"\nArquitectura {arch_name} - Promedio Final:")
+        print(f"  Train Acc: {train_accs_avg[-1]:.4f} ± {train_accs_std[-1]:.4f}")
+        print(f"  Test Acc:  {test_accs_avg[-1]:.4f} ± {test_accs_std[-1]:.4f}")
+    
+    # === GRÁFICO COMPARATIVO ===
+    plt.figure(figsize=(14, 8))
+    
+    colors = {'A': '#ff7f0e', 'B': '#2ca02c', 'C': '#d62728'}
+    epochs_range = range(1, epochs + 1)
+    
+    # Plotear accuracy de test (generalización)
+    for arch_name in ['A', 'B', 'C']:
+        test_acc_avg = results[arch_name]['test_acc_avg']
+        test_acc_std = results[arch_name]['test_acc_std']
+        layer_sizes = results[arch_name]['layer_sizes']
+        
+        plt.plot(epochs_range, test_acc_avg, 
+                label=f'Arquitectura {arch_name} {layer_sizes}', 
+                linewidth=3, color=colors[arch_name], marker='o', markersize=2)
+        
+        # Agregar banda de desviación estándar (limitada a máximo 1.0)
+        upper_bound = np.minimum(test_acc_avg + test_acc_std, 1.0)
+        lower_bound = np.maximum(test_acc_avg - test_acc_std, 0.0)
+        plt.fill_between(epochs_range, 
+                        lower_bound, 
+                        upper_bound, 
+                        alpha=0.2, color=colors[arch_name])
+    
+    plt.xlabel('Época')
+    plt.ylabel('Accuracy de Test')
+    plt.title('Comparación de Arquitecturas MLP - Accuracy de Test vs Épocas')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Ajustar límites del eje Y con padding para mejor visualización
+    y_min = min(min(results[arch]['test_acc_avg']) for arch in ['A', 'B', 'C'])
+    y_max = max(max(results[arch]['test_acc_avg']) for arch in ['A', 'B', 'C'])
+    
+    # Agregar padding del 5% arriba y abajo
+    y_padding = (y_max - y_min) * 0.05
+    plt.ylim(max(0, y_min - y_padding), min(1.05, y_max + y_padding))
+    
+    # Agregar líneas de referencia solo si están dentro del rango visible
+    if y_max >= 0.9:
+        plt.axhline(y=0.9, color='gray', linestyle='--', alpha=0.5, label='90% Accuracy')
+    if y_max >= 0.8:
+        plt.axhline(y=0.8, color='gray', linestyle='--', alpha=0.3, label='80% Accuracy')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # === RESUMEN FINAL ===
+    print(f"\n{'='*70}")
+    print("RESUMEN FINAL - ACCURACY DE TEST (GENERALIZACIÓN)")
+    print(f"{'='*70}")
+    
+    for arch_name in ['A', 'B', 'C']:
+        layer_sizes = results[arch_name]['layer_sizes']
+        test_acc_final = results[arch_name]['test_acc_avg'][-1]
+        test_acc_std_final = results[arch_name]['test_acc_std'][-1]
+        
+        print(f"Arquitectura {arch_name} {layer_sizes}:")
+        print(f"  Accuracy Final: {test_acc_final:.4f} ± {test_acc_std_final:.4f}")
+        
+        # Calcular parámetros aproximados
+        total_params = sum(layer_sizes[i] * layer_sizes[i+1] for i in range(len(layer_sizes)-1))
+        print(f"  Parámetros Aprox: {total_params}")
+        print()
+    
+    # Análisis del trade-off
+    print("ANÁLISIS DEL TRADE-OFF:")
+    arch_a_final = results['A']['test_acc_avg'][-1]
+    arch_b_final = results['B']['test_acc_avg'][-1] 
+    arch_c_final = results['C']['test_acc_avg'][-1]
+    
+    best_arch = max([('A', arch_a_final), ('B', arch_b_final), ('C', arch_c_final)], key=lambda x: x[1])
+    print(f"Mejor arquitectura: {best_arch[0]} con accuracy {best_arch[1]:.4f}")
+    
+    if arch_c_final < arch_b_final:
+        print("⚠️  Arquitectura C muestra posible sobreajuste (menor generalización)")
+    elif arch_b_final > arch_a_final:
+        print("✅ Arquitectura B muestra mejor equilibrio complejidad-generalización")
+    
+    return results

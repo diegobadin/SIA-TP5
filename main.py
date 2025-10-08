@@ -58,8 +58,8 @@ def main():
             print("       <item> options: xor | parity | digits")
             return
         item = sys.argv[2].lower()
-        if item not in ("xor", "parity", "digits"):
-            print("Invalid item. Use: xor | parity | digits")
+        if item not in ("xor", "parity", "digits", "architecture_comparison"):
+            print("Invalid item. Use: xor | parity | digits | architecture_comparison")
             return
         run_experiment("ex3",item)
 
