@@ -136,11 +136,8 @@ def run_depth_experiment(x_train, y_train, y_train_labels, seed, x_test, y_test)
     comparison_losses_mean = {}
     mean_times = {}
 
-    # Usar un Split ÚNICO (80% Train, 20% Validation)
-    splitter = StratifiedKFold(n_splits=5, shuffle=True, seed=seed)
-    tr_idx, te_idx = next(splitter.split(x_train, y_train_labels))
-    Xtr, Ytr = x_train[tr_idx], y_train[tr_idx]
-    Xva, Yva = x_train[te_idx], y_train[te_idx]
+    Xtr, Ytr = x_train, y_train
+    Xva, Yva = x_test, y_test
 
     print("--- Beginning of depth experiment ---")
 
