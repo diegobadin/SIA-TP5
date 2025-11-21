@@ -1,11 +1,13 @@
-# SIA TP3 - Perceptrón Simple y Multicapa
+# SIA TP5 - Deep Learning
 
-Este trabajo práctico tiene como objetivo implementar algoritmos de **perceptrón simple** y **perceptrón multicapa**, para resolver problemas de clasificación de datos y funciones lógicas.
-Se abordan tres ejercicios principales: 
+Este trabajo práctico tiene como objetivo implementar algoritmos de Autoencoders (Autoencoder Básico y 
+Denoising Autoencoder) y Variational Autoencoder (VAE). El foco está en la representación de datos en un espacio 
+latente de baja dimensión y la generación de nuevas muestras. 
 
 ## Prerrequisitos
 - [Python](https://www.python.org/downloads/) instalado en el sistema.
 - `pip` disponible en la terminal (`pip --version` para verificar).
+- Archivos de datos necesarios, como font.h (para los caracteres $5 \times 7$)
 
 ## Construcción
 
