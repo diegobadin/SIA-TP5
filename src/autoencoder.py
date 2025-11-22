@@ -206,3 +206,15 @@ class Autoencoder:
         X_binary = (X > threshold).astype(float)
         X_recon_binary = (X_reconstructed > threshold).astype(float)
         return np.sum(X_binary != X_recon_binary, axis=1)
+
+    def generate_from_latent(self, z: np.ndarray) -> np.ndarray:
+        """
+        Genera un nuevo carácter decodificando un punto en el espacio latente.
+        
+        Args:
+            z: Vector latente de forma (latent_dim,) o (n_samples, latent_dim)
+            
+        Returns:
+            Carácter(es) generado(s) de forma (output_dim,) o (n_samples, output_dim)
+        """
+        return self.decode(z)
