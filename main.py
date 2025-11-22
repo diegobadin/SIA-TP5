@@ -1,9 +1,10 @@
 import sys
-from exercises import ej1, ej1b_denoising
+from exercises import ej1, ej1b_denoising, ej2_vae
 
 EXPERIMENTS = {
     "ex1": ej1.run,
-    "denoising": ej1b_denoising.run
+    "denoising": ej1b_denoising.run,
+    "vae": ej2_vae.run
 }
 
 
@@ -11,6 +12,7 @@ EXPERIMENTS = {
 Usage:
   python main.py ex1 <latent_dim?> <epochs?> <noise_level?> <deep?> <batch_size?> <lr?> <scale?>
   python main.py denoising
+  python main.py vae
 """
 
 def run_experiment(name: str, *args):
@@ -28,6 +30,7 @@ def main():
         print("Usage:")
         print("  python main.py ex1 <latent_dim?> <epochs?> <noise_level?> <deep?> <batch_size?> <lr?> <scale?>")
         print("  python main.py denoising")
+        print("  python main.py vae")
         return
 
     experiment_name = sys.argv[1]
@@ -43,6 +46,8 @@ def main():
         run_experiment("ex1", latent, epochs, noise, deep, batch_size, lr, scale)
     elif experiment_name == "denoising":
         run_experiment("denoising")
+    elif experiment_name == "vae":
+        run_experiment("vae")
     else:
         print(f"Experiment '{experiment_name}' not recognized.")
         print(f"Available experiments: {list(EXPERIMENTS.keys())}")

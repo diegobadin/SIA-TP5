@@ -99,3 +99,54 @@ Los parámetros por defecto pueden modificarse editando la función `run()` en `
 - `epochs`: Épocas de entrenamiento por nivel (default: 300)
 - `deep`: Usar capa oculta (default: True)
 - `batch_size`, `lr`, `scale`: Parámetros de entrenamiento
+
+#### Variational Autoencoder (VAE) (Ejercicio 2)
+
+Implementa un Variational Autoencoder que extiende el autoencoder con un esquema variacional para generar nuevas muestras:
+
+```bash
+python main.py vae
+```
+
+O ejecutar directamente:
+
+```bash
+python exercises/ej2_vae.py
+```
+
+**Descripción:**
+Este ejercicio implementa un VAE completo que:
+- **a) Nuevo dataset**: Utiliza un conjunto de datos de emojis simples definidos en formato ASCII art (`data/emojis.txt`). Los emojis son patrones binarios (caras sonrientes, círculos, cuadrados, triángulos, corazones, estrellas, etc.) donde `#` representa un pixel activo (1) y `.` representa un pixel inactivo (0). El formato es fácil de editar y visualizar.
+- **b) Esquema variacional**: 
+  - Encoder produce parámetros de distribución (μ, log_var)
+  - Implementa el truco de reparametrización: z = μ + σ * ε donde ε ~ N(0, I)
+  - Pérdida combinada: L = L_reconstrucción + β * L_KL
+  - Divergencia KL: KL(q(z|x) || p(z)) donde p(z) = N(0, I)
+- **c) Generación**: Muestrea del prior N(0, I) y decodifica para generar nuevas muestras
+
+**Arquitectura:**
+- **Encoder**: [input_dim] → [32] → [16] → (μ, log_var) donde cada uno tiene dimensión `latent_dim`
+- **Decoder**: [latent_dim] → [16] → [32] → [output_dim]
+- Activaciones: TANH para capas ocultas, SIGMOID para salida del decoder
+- Espacio latente: 2D por defecto (configurable)
+
+**Salidas generadas:**
+- `outputs/vae_training_curves.png` - Curvas de pérdida (reconstrucción, KL, total)
+- `outputs/vae_latent_space.png` - Visualización 2D del espacio latente mostrando μ para cada muestra
+- `outputs/vae_generated_samples.png` - Grid comparando muestras de entrenamiento (arriba) vs generadas (abajo)
+- `outputs/vae_training_report.json` - Reporte con métricas de entrenamiento
+- `outputs/emoji_dataset_sample.png` - Muestra del dataset de emojis creado
+
+**Dataset:**
+El dataset de emojis se encuentra en `data/emojis.txt` en formato ASCII art. Cada emoji está separado por líneas en blanco y puede editarse fácilmente para agregar nuevos patrones. El parser (`utils/parse_emoji.py`) convierte automáticamente el ASCII art a matrices binarias.
+
+**Configuración:**
+Los parámetros pueden modificarse editando la función `train_vae_simple()` en `exercises/ej2_vae.py`:
+- `latent_dim`: Dimensión del espacio latente (default: 2)
+- `epochs`: Épocas de entrenamiento (default: 200)
+- `beta`: Peso de la divergencia KL en la pérdida total (default: 1.0)
+- `batch_size`: Tamaño del batch (default: 4)
+- `lr`: Learning rate (default: 0.001)
+
+**Nota sobre el entrenamiento:**
+El VAE utiliza un esquema de entrenamiento simplificado donde el decoder se entrena usando el método estándar de MLP. Para una implementación completa con gradientes exactos a través de la reparametrización, se recomendaría usar un framework con diferenciación automática (PyTorch/TensorFlow). La estructura implementada demuestra correctamente los conceptos del VAE y permite generar nuevas muestras.
