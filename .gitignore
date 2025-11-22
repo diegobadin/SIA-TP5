@@ -2,4 +2,5 @@
 .venv/
 __pycache__/
 Enunciado TP4.pdf
-output/
+outputs/
+venv/
