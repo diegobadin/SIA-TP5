@@ -1,7 +1,11 @@
 import json
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+
+# Agregar el directorio raíz del proyecto al path para poder importar módulos
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.autoencoder import Autoencoder
 from src.mlp.activations import SIGMOID, TANH
@@ -10,46 +14,8 @@ from src.mlp.optimizers import Adam
 from utils.graphs import plot_loss
 from utils.noise import add_noise
 from utils.parse_font import parse_font_h
-
-
-def _plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8):
-    n = X.shape[0]
-    n_cols = min(n_cols, n)
-    n_rows = int(np.ceil(n / n_cols))
-    plt.figure(figsize=(n_cols * 1.2, n_rows * 1.4))
-    for i in range(n):
-        plt.subplot(n_rows, n_cols, i + 1)
-        plt.imshow(X[i].reshape(shape), cmap="gray_r")
-        plt.axis("off")
-    plt.suptitle(title)
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
-
-
-def _plot_latent(latent, labels, title, fname=None, highlight_point=None):
-    """Plot latent space with character labels, optionally highlighting a generated point."""
-    plt.figure(figsize=(8, 8))
-    plt.scatter(latent[:, 0], latent[:, 1], c="C0", alpha=0.6, s=100, label="Training data")
-    for i, (x, y) in enumerate(latent):
-        plt.text(x, y, str(labels[i]), fontsize=8, ha="center", va="center")
-    
-    if highlight_point is not None:
-        plt.scatter(highlight_point[0], highlight_point[1], c="red", s=200, 
-                   marker="*", label="Generated", edgecolors="black", linewidths=2)
-        plt.text(highlight_point[0], highlight_point[1], "GEN", fontsize=10, 
-                ha="center", va="center", color="white", weight="bold")
-    
-    plt.xlabel("z1")
-    plt.ylabel("z2")
-    plt.title(title)
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
+from utils.plot_ej1 import plot_grid
+from utils.plot_autoencoder import plot_latent_space, plot_generation_results
 
 
 def encode_training_data(ae, X, labels):
@@ -85,7 +51,8 @@ def interpolate_chars(ae, X, idx1, idx2, alpha=0.5):
     """
     z1 = ae.encode(X[idx1])
     z2 = ae.encode(X[idx2])
-    z_new = alpha * z1 + (1 - alpha) * z2
+    # Interpolación: alpha=0.0 -> char1, alpha=1.0 -> char2
+    z_new = (1 - alpha) * z1 + alpha * z2
     X_new = ae.generate_from_latent(z_new)
     return z_new, X_new
 
@@ -131,52 +98,10 @@ def compare_with_training(X_new, X_train, labels, threshold=0.0):
     }
 
 
-def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, char_idx2, 
-                           X_train, title, fname=None, shape=(7, 5)):
-    """
-    Plot generated character and nearest neighbor comparison.
-    
-    Args:
-        generated_char: Generated character (n_features,)
-        nearest_neighbor_char: Nearest neighbor from training (n_features,)
-        char_idx1: Index of first character used in interpolation
-        char_idx2: Index of second character used in interpolation
-        X_train: Training data
-        title: Plot title
-        fname: Output filename
-        shape: Shape to reshape characters for display
-    """
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-    
-    # Original character 1
-    axes[0].imshow(X_train[char_idx1].reshape(shape), cmap="gray_r")
-    axes[0].set_title(f"Char {char_idx1}\n(original)")
-    axes[0].axis("off")
-    
-    # Generated character
-    axes[1].imshow(generated_char.reshape(shape), cmap="gray_r")
-    axes[1].set_title(f"Generated\n(interp: {char_idx1}→{char_idx2})")
-    axes[1].axis("off")
-    
-    # Original character 2
-    axes[2].imshow(X_train[char_idx2].reshape(shape), cmap="gray_r")
-    axes[2].set_title(f"Char {char_idx2}\n(original)")
-    axes[2].axis("off")
-    
-    # Nearest neighbor
-    axes[3].imshow(nearest_neighbor_char.reshape(shape), cmap="gray_r")
-    axes[3].set_title("Nearest Neighbor\n(from training)")
-    axes[3].axis("off")
-    
-    plt.suptitle(title)
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
 
 
 def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5, 
-                          scale="-11", output_prefix="generation"):
+                          scale="01", output_prefix="generation"):
     """
     Orchestrate the complete generation workflow.
     
@@ -200,9 +125,20 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     all_latent = np.array([latent_dict[label] for label in sorted(latent_dict.keys())])
     
     # Step 2: Plot latent space
-    _plot_latent(all_latent, sorted(latent_dict.keys()), 
-                "Latent Space - Training Data", 
-                f"{output_prefix}_latent_space.png")
+    # Crear diccionario con una sola configuración para plot_latent_space
+    char_map = {
+        0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+        8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+        16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+        24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+    }
+    plot_latent_space(
+        {"Training Data": all_latent}, 
+        np.array(sorted(latent_dict.keys())),
+        save_path=f"outputs/{output_prefix}_latent_space.png",
+        char_map=char_map,
+        individual=True
+    )
     
     # Step 3: Interpolate between two characters
     z_new, X_new = interpolate_chars(ae, X, char_idx1, char_idx2, alpha)
@@ -230,10 +166,18 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
                            f"{output_prefix}_comparison.png")
     
     # Plot latent space with generated point highlighted
-    _plot_latent(all_latent, sorted(latent_dict.keys()),
-                f"Latent Space with Generated Point\n(α={alpha}, {char_idx1}→{char_idx2})",
-                f"{output_prefix}_latent_with_generated.png",
-                highlight_point=z_new)
+    # Agregar el punto generado al array de latent para visualizarlo
+    all_latent_with_gen = np.vstack([all_latent, z_new])
+    labels_with_gen = np.append(sorted(latent_dict.keys()), -1)  # -1 para el punto generado
+    char_map_with_gen = char_map.copy()
+    char_map_with_gen[-1] = "GEN"  # Etiqueta para el punto generado
+    plot_latent_space(
+        {f"Generated Point (α={alpha})": all_latent_with_gen},
+        labels_with_gen,
+        save_path=f"outputs/{output_prefix}_latent_with_generated.png",
+        char_map=char_map_with_gen,
+        individual=True
+    )
     
     # Save generation report
     report = {
@@ -262,45 +206,63 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     return report
 
 
-def run(latent_dim=2, epochs=200, noise_level=0.0, deep=False,
-        batch_size=4, lr=0.01, scale="-11"):
+def run(latent_dim=2, noise_level=0.0):
     """
-    Entrena un autoencoder sobre los caracteres 7x5 de font.h.
+    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Inicializacion_Grande.
+    
+    Configuración fija: Inicializacion_Grande
+    - Arquitectura: 35 → [20, 10] → 2 → [10, 20] → 35
+    - Activaciones: TANH en encoder y capas ocultas, SIGMOID en salida
+    - Optimizador: Adam(lr=0.001)
+    - Batch size: 1
+    - W init scale: 0.2
+    - Scale: "01" (datos en [0, 1])
+    - Early stopping: max_pixel_error=1.0
 
-    Parámetros frecuentes:
-      latent_dim : tamaño del espacio latente
+    Parámetros:
+      latent_dim : tamaño del espacio latente (default: 2)
       noise_level: >0 para denoising (agrega ruido gaussiano a la entrada)
-      deep       : agrega una capa oculta adicional 16-neuronas a cada lado
-      scale      : '01' usa salida sigmoide, '-11' usa salida tanh
     """
+    # Configuración Inicializacion_Grande (fija)
+    print("="*80)
+    print("Configuración: Inicializacion_Grande")
+    print("="*80)
+    scale = "01" 
+    encoder_hidden = [20, 10]
+    decoder_hidden = [10, 20]
+    encoder_activations = [TANH, TANH, TANH]
+    decoder_activations = [TANH, TANH, SIGMOID]
+    lr = 0.001
+    batch_size = 1
+    w_init_scale = 0.2
+    max_epochs = 10000
+    max_pixel_error = 1.0
+    
     X, labels = parse_font_h(scale=scale)
     X_in = add_noise(X, noise_level=noise_level, seed=42) if noise_level > 0 else X
-
-    hidden = [16] if deep else []
-    out_act = SIGMOID if scale == "01" else TANH
-
-    encoder_acts = [TANH] * (len(hidden) + 1)
-    decoder_acts = ([TANH] * len(hidden)) + [out_act]
 
     autoencoder = Autoencoder(
         input_dim=X.shape[1],
         latent_dim=latent_dim,
-        encoder_hidden=hidden,
-        decoder_hidden=list(reversed(hidden)),
-        encoder_activations=encoder_acts,
-        decoder_activations=decoder_acts,
+        encoder_hidden=encoder_hidden,
+        decoder_hidden=decoder_hidden,
+        encoder_activations=encoder_activations,
+        decoder_activations=decoder_activations,
         loss=MSELoss(),
         optimizer=Adam(lr=lr),
-        w_init_scale=0.1,
+        w_init_scale=w_init_scale,
         seed=42,
     )
 
     losses = autoencoder.fit(
         X_in, X,
-        epochs=epochs,
+        epochs=max_epochs,
         batch_size=batch_size,
         shuffle=True,
-        verbose=True
+        verbose=False,
+        max_pixel_error=max_pixel_error,
+        check_every=1,
+        pixel_error_threshold=0.5 if scale == "01" else 0.0
     )
 
     # Reconstrucciones
@@ -308,37 +270,103 @@ def run(latent_dim=2, epochs=200, noise_level=0.0, deep=False,
 
     # Graficos básicos
     plot_loss(losses, loss_name="MSE", title="Autoencoder - Loss", fname="autoencoder_loss.png")
-    _plot_grid(X, "Originales", fname="autoencoder_originals.png")
-    _plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png")
+    plot_grid(X, "Originales", fname="autoencoder_originals.png")
+    plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png")
 
     # Reporte rápido
     final_loss = losses[-1] if losses else None
-    print(f"[Autoencoder] latent={latent_dim} deep={deep} noise={noise_level} scale={scale}")
+    print(f"[Autoencoder] latent={latent_dim} noise={noise_level} scale={scale}")
     print(f"Loss final: {final_loss:.6f}" if final_loss is not None else "Sin pérdidas registradas.")
     
     # Requirement 3: Plot latent space (2D visualization)
     if latent_dim == 2:
         latent = autoencoder.get_latent_representation(X)
-        _plot_latent(latent, labels, "Latent Space - All Training Characters", 
-                    "latent_space.png")
+        char_map = {
+            0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+            8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+            16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+            24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+        }
+        plot_latent_space(
+            {"All Training Characters": latent},
+            labels,
+            save_path="outputs/latent_space.png",
+            char_map=char_map,
+            individual=True
+        )
         print("\n[Requirement 3] Latent space plot saved to outputs/latent_space.png")
     
     # Requirement 4: Generate new letters not in training set
     if latent_dim == 2:  # Only generate if using 2D latent space
-        print("\n=== Generating New Characters (Requirement 4) ===")
+        print("\n" + "="*80)
+        print("REQUIREMENT 4: Generar nuevas letras que no pertenecen al conjunto de entrenamiento")
+        print("="*80)
+        print("\nLa generación se realiza interpolando en el espacio latente entre dos caracteres")
+        print("del conjunto de entrenamiento. Esto crea nuevos caracteres que no están en el dataset.")
+        print("="*80)
         
-        # Generate for several character pairs
+        # Mapeo de índices a caracteres para mejor visualización
+        char_map = {
+            0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+            8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+            16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+            24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+        }
+        
+        # Generate for several character pairs with different interpolation values
         char_pairs = [
-            (1, 2),   # 'a' → 'b'
-            (15, 4),  # 'o' → 'd'
+            (1, 17),  # 'a' → 'q'
+            (15, 13), # 'o' → 'm'
             (2, 3),   # 'b' → 'c'
+            (2, 11),  # 'b' → 'k'
         ]
+        
+        # Diferentes valores de alpha para mostrar diferentes puntos de interpolación
+        alphas = [0.3, 0.5, 0.7]
         
         for i, (idx1, idx2) in enumerate(char_pairs):
             if idx1 < len(X) and idx2 < len(X):
-                demonstrate_generation(
-                    autoencoder, X, labels, idx1, idx2, alpha=0.5,
-                    scale=scale, output_prefix=f"gen_{i+1}_char{idx1}_to_char{idx2}"
-                )
+                char1 = char_map.get(int(labels[idx1]), str(int(labels[idx1])))
+                char2 = char_map.get(int(labels[idx2]), str(int(labels[idx2])))
+                print(f"\n--- Generando entre '{char1}' (índice {idx1}) y '{char2}' (índice {idx2}) ---")
+                
+                # Generar con diferentes valores de alpha
+                for alpha in alphas:
+                    demonstrate_generation(
+                        autoencoder, X, labels, idx1, idx2, alpha=alpha,
+                        scale=scale, output_prefix=f"gen_{i+1}_{char1}_to_{char2}_alpha{alpha}"
+                    )
+        
+        print("\n" + "="*80)
+        print("✓ Generación completada. Revisa los archivos en outputs/ para ver los resultados.")
+        print("="*80)
     
-    plt.show()
+    return autoencoder, X, labels, losses
+
+
+if __name__ == "__main__":
+    """
+    Ejecuta el ejercicio 1 con la configuración Inicializacion_Grande (fija).
+    Esta configuración usa scale="01" (datos en [0, 1]) con SIGMOID en la salida.
+    """
+    print("\n" + "="*80)
+    print("EJERCICIO 1: Autoencoder para caracteres 7x5")
+    print("Configuración: Inicializacion_Grande (fija)")
+    print("="*80 + "\n")
+    
+    # Ejecutar con la configuración Inicializacion_Grande (siempre se usa esta configuración)
+    autoencoder, X, labels, losses = run(
+        latent_dim=2
+    )
+    
+    print("\n" + "="*80)
+    print("EJERCICIO COMPLETADO")
+    print("="*80)
+    print("\nArchivos generados en outputs/:")
+    print("  - autoencoder_loss.png: Curva de pérdida durante el entrenamiento")
+    print("  - autoencoder_originals.png: Caracteres originales")
+    print("  - autoencoder_recon.png: Caracteres reconstruidos")
+    print("  - latent_space.png: Visualización del espacio latente 2D")
+    print("  - gen_*_*.png: Caracteres generados por interpolación")
+    print("  - gen_*_generation_report.json: Reportes de generación")
+    print("="*80)

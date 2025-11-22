@@ -404,6 +404,55 @@ def plot_pixel_error_comparison_table(autoencoders: Dict[str, Any], X: np.ndarra
     plt.close()
 
 
+def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, char_idx2, 
+                           X_train, title, fname=None, shape=(7, 5)):
+    """
+    Plot generated character and nearest neighbor comparison.
+    
+    Args:
+        generated_char: Generated character (n_features,)
+        nearest_neighbor_char: Nearest neighbor from training (n_features,)
+        char_idx1: Index of first character used in interpolation
+        char_idx2: Index of second character used in interpolation
+        X_train: Training data
+        title: Plot title
+        fname: Output filename (optional)
+        shape: Shape to reshape characters for display
+    """
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    
+    # Original character 1
+    axes[0].imshow(X_train[char_idx1].reshape(shape), cmap="gray_r")
+    axes[0].set_title(f"Char {char_idx1}\n(original)")
+    axes[0].axis("off")
+    
+    # Generated character
+    axes[1].imshow(generated_char.reshape(shape), cmap="gray_r")
+    axes[1].set_title(f"Generated\n(interp: {char_idx1}→{char_idx2})")
+    axes[1].axis("off")
+    
+    # Original character 2
+    axes[2].imshow(X_train[char_idx2].reshape(shape), cmap="gray_r")
+    axes[2].set_title(f"Char {char_idx2}\n(original)")
+    axes[2].axis("off")
+    
+    # Nearest neighbor
+    axes[3].imshow(nearest_neighbor_char.reshape(shape), cmap="gray_r")
+    axes[3].set_title("Nearest Neighbor\n(from training)")
+    axes[3].axis("off")
+    
+    plt.suptitle(title)
+    plt.tight_layout()
+    if fname:
+        os.makedirs(os.path.dirname(fname) if os.path.dirname(fname) else "outputs", exist_ok=True)
+        if not os.path.dirname(fname):
+            fname = f"outputs/{fname}"
+        plt.savefig(fname, dpi=140)
+        plt.close()
+    else:
+        plt.close()
+
+
 def plot_comparison_table(results: Dict[str, Dict], save_path: str = "outputs/comparison_table.png"):
     """Crea una tabla visual comparando las configuraciones."""
     fig, ax = plt.subplots(figsize=(14, 8))
