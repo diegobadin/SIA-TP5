@@ -95,7 +95,29 @@ class MLP:
         return self.loss.value(y_hat, y)
 
     def fit(self, X: np.ndarray, Y: np.ndarray, epochs: int = 100,
-            batch_size: int = 1, shuffle: bool = True, verbose: bool = False) -> List[float]:
+            batch_size: int = 1, shuffle: bool = True, verbose: bool = False,
+            validation_fn: Optional[Callable[[np.ndarray, np.ndarray, 'MLP'], float]] = None,
+            max_validation_error: Optional[float] = None,
+            check_every: int = 1) -> List[float]:
+        """
+        Entrena el MLP.
+        
+        Args:
+            X: Datos de entrada (N, input_dim)
+            Y: Datos objetivo (N, output_dim)
+            epochs: Número máximo de épocas
+            batch_size: Tamaño del batch
+            shuffle: Si barajar los datos
+            verbose: Si imprimir progreso
+            validation_fn: Función que calcula un error de validación: validation_fn(X, Y, model) -> error
+                         Se usa para early stopping si max_validation_error no es None.
+            max_validation_error: Si se proporciona y validation_fn existe, detiene el entrenamiento
+                                cuando validation_fn(X, Y, model) <= max_validation_error.
+            check_every: Cada cuántas épocas verificar el error de validación (default: 1 = cada época)
+        
+        Returns:
+            Historial de pérdidas
+        """
         N = X.shape[0]; hist: List[float] = []
         for ep in range(epochs):
             idx = np.arange(N)
@@ -133,7 +155,25 @@ class MLP:
                     epoch_loss += b_loss
 
             epoch_loss /= N; hist.append(epoch_loss)
-            if verbose: print(f"[{ep+1:03d}/{epochs}] loss={epoch_loss:.6f}")
+            
+            # Verificar early stopping basado en error de validación
+            should_check = (validation_fn is not None and max_validation_error is not None and
+                          ((ep + 1) % check_every == 0 or ep == 0))
+            
+            if should_check:
+                validation_error = validation_fn(X, Y, self)
+                should_stop = validation_error <= max_validation_error
+                
+                if verbose or should_stop:
+                    msg = f"[{ep+1:03d}/{epochs}] loss={epoch_loss:.6f}, validation_error={validation_error:.2f}"
+                    print(msg)
+                
+                if should_stop:
+                    print(f"\n✓ Training stopped early: validation error {validation_error:.2f} <= {max_validation_error}")
+                    break
+            elif verbose:
+                print(f"[{ep+1:03d}/{epochs}] loss={epoch_loss:.6f}")
+        
         self.error_history = hist.copy()
         return hist
 
