@@ -230,7 +230,7 @@ def main():
     print("="*80)
     
     print("\nCargando datos...")
-    X, labels = parse_font_h("data/font.h", scale="01")
+    X, labels = parse_font_h("../data/font.h", scale="01")
     print(f"✓ Datos cargados: {X.shape[0]} patrones de {X.shape[1]} píxeles (escala [0, 1])")
     
     configs = get_selected_configurations()
@@ -263,14 +263,14 @@ def main():
     print("="*80)
     
     # 1. Curvas de pérdida
-    plot_loss_curves(histories, "outputs/ppt_loss_curves.png")
+    plot_loss_curves(histories, "../outputs/ppt_loss_curves.png")
     
     # 2. Reconstrucciones (todos los caracteres)
-    plot_reconstructions(X, reconstructions, labels, n_samples=None, 
-                        save_path="outputs/ppt_reconstructions.png")
+    plot_reconstructions(X, reconstructions, labels, n_samples=None,
+                         save_path="../outputs/ppt_reconstructions.png")
     
     # 3. Espacio latente (combinado)
-    plot_latent_space(latent_reps, labels, save_path="outputs/ppt_latent_space.png")
+    plot_latent_space(latent_reps, labels, save_path="../outputs/ppt_latent_space.png")
     
     # 3b. Espacio latente individual (uno por configuración con colores)
     # Mapeo de índices a caracteres basado en font.h
@@ -284,7 +284,7 @@ def main():
                      char_map=char_map, individual=True)
     
     # 4. Tabla comparativa
-    plot_comparison_table(results, save_path="outputs/ppt_comparison_table.png")
+    plot_comparison_table(results, save_path="../outputs/ppt_comparison_table.png")
     
     
     # Resumen final
@@ -302,8 +302,8 @@ def main():
         print(f"    - Error máximo: {data['max_error']:.2f}, Promedio: {data['mean_error']:.2f}")
     
     # 7. Tabla comparativa: Error de píxeles por índice y configuración
-    plot_pixel_error_comparison_table(autoencoders, X, labels, 
-                                     save_path="outputs/ppt_pixel_error_comparison.png")
+    plot_pixel_error_comparison_table(autoencoders, X, labels,
+                                      save_path="../outputs/ppt_pixel_error_comparison.png")
     
     print("\n" + "="*80)
     print("GRÁFICOS GENERADOS EN: outputs/")
