@@ -13,6 +13,37 @@ import os
 from typing import Dict, List, Any, Optional
 
 
+def plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8):
+    """
+    Plot a grid of characters/images.
+    
+    Args:
+        X: Array of images/characters (n_samples, n_features)
+        title: Plot title
+        fname: Output filename (optional)
+        shape: Shape to reshape each character for display
+        n_cols: Number of columns in the grid
+    """
+    n = X.shape[0]
+    n_cols = min(n_cols, n)
+    n_rows = int(np.ceil(n / n_cols))
+    plt.figure(figsize=(n_cols * 1.2, n_rows * 1.4))
+    for i in range(n):
+        plt.subplot(n_rows, n_cols, i + 1)
+        plt.imshow(X[i].reshape(shape), cmap="gray_r")
+        plt.axis("off")
+    plt.suptitle(title)
+    plt.tight_layout()
+    if fname:
+        os.makedirs(os.path.dirname(fname) if os.path.dirname(fname) else "outputs", exist_ok=True)
+        if not os.path.dirname(fname):
+            fname = f"outputs/{fname}"
+        plt.savefig(fname, dpi=140)
+        plt.close()
+    else:
+        plt.close()
+
+
 def plot_loss_curves(histories: Dict[str, List[float]], save_path: str = "outputs/loss_curves.png",
                     title: str = "Evolución del Error de Píxeles Promedio por Época"):
     """Grafica las curvas de error de píxeles promedio para múltiples configuraciones."""
@@ -156,29 +187,82 @@ def plot_latent_space(latent_reps: Dict[str, np.ndarray], labels: np.ndarray,
 
 def _plot_single_latent_space(latent: np.ndarray, labels: np.ndarray, 
                               config_name: str, save_path: str,
-                              char_map: Optional[Dict[int, str]] = None):
+                              char_map: Optional[Dict[int, str]] = None,
+                              highlight_point: Optional[np.ndarray] = None):
     """Genera un gráfico individual del espacio latente para una configuración."""
     fig, ax = plt.subplots(figsize=(10, 10))
-    _plot_latent_on_axis(ax, latent, labels, config_name, char_map)
+    _plot_latent_on_axis(ax, latent, labels, config_name, char_map, highlight_point)
     plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else ".", exist_ok=True)
     plt.savefig(save_path, dpi=200, bbox_inches='tight')
     plt.close()
 
 
+def plot_latent_space_with_generated(latent: np.ndarray, labels: np.ndarray,
+                                     generated_point: np.ndarray,
+                                     title: str, save_path: str,
+                                     char_map: Optional[Dict[int, str]] = None):
+    """
+    Plotea el espacio latente con los caracteres de entrenamiento y destaca el punto generado con una estrella.
+    
+    Args:
+        latent: Vectores latentes de los caracteres de entrenamiento (n_samples, 2)
+        labels: Etiquetas de los caracteres de entrenamiento (n_samples,)
+        generated_point: Vector latente del carácter generado (2,)
+        title: Título del gráfico
+        save_path: Ruta donde guardar el gráfico
+        char_map: Diccionario opcional que mapea índice -> carácter
+    """
+    fig, ax = plt.subplots(figsize=(10, 10))
+    _plot_latent_on_axis(ax, latent, labels, title, char_map, highlight_point=generated_point)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else "outputs", exist_ok=True)
+    if not os.path.dirname(save_path):
+        save_path = f"outputs/{save_path}"
+    plt.savefig(save_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Gráfico guardado: {save_path}")
+
+
 def _plot_latent_on_axis(ax, latent: np.ndarray, labels: np.ndarray,
-                         config_name: str, char_map: Optional[Dict[int, str]] = None):
-    """Plotea el espacio latente en un eje dado con colores distintivos."""
+                         config_name: str, char_map: Optional[Dict[int, str]] = None,
+                         highlight_point: Optional[np.ndarray] = None):
+    """Plotea el espacio latente en un eje dado con colores distintivos.
+    
+    Args:
+        ax: Eje de matplotlib donde plotear
+        latent: Array de vectores latentes (n_samples, 2)
+        labels: Array de etiquetas (n_samples,)
+        config_name: Nombre de la configuración
+        char_map: Diccionario opcional que mapea índice -> carácter
+        highlight_point: Punto opcional a destacar con una estrella (array de shape (2,))
+    """
     # Normalizar el espacio latente al rango [0, 1]
+    # Si hay highlight_point, incluirlo en la normalización
+    if highlight_point is not None:
+        all_points = np.vstack([latent, highlight_point.reshape(1, -1)])
+    else:
+        all_points = latent
+    
     latent_normalized = latent.copy()
+    highlight_normalized = None
+    
     for dim in range(latent.shape[1]):
-        dim_values = latent[:, dim]
+        dim_values = all_points[:, dim]
         min_val = np.min(dim_values)
         max_val = np.max(dim_values)
         if max_val > min_val:
-            latent_normalized[:, dim] = (dim_values - min_val) / (max_val - min_val)
+            latent_normalized[:, dim] = (latent[:, dim] - min_val) / (max_val - min_val)
+            if highlight_point is not None:
+                if highlight_normalized is None:
+                    highlight_normalized = np.zeros(2)
+                highlight_normalized[dim] = (highlight_point[dim] - min_val) / (max_val - min_val)
         else:
             latent_normalized[:, dim] = 0.5
+            if highlight_point is not None:
+                if highlight_normalized is None:
+                    highlight_normalized = np.zeros(2)
+                highlight_normalized[dim] = 0.5
     
     # Usar colores distintos y vibrantes para cada carácter
     n_chars = len(latent_normalized)
@@ -275,6 +359,20 @@ def _plot_latent_on_axis(ax, latent: np.ndarray, labels: np.ndarray,
                         linewidth=2.5, alpha=0.9),
                zorder=4)
     
+    # Plotear el punto destacado (estrella) si existe
+    if highlight_point is not None and highlight_normalized is not None:
+        ax.scatter(highlight_normalized[0], highlight_normalized[1], 
+                  c='red', s=500, marker='*', 
+                  edgecolors='black', linewidths=3, 
+                  label='Generated', zorder=5, alpha=0.9)
+        # Agregar etiqueta "GEN" al punto destacado
+        ax.text(highlight_normalized[0], highlight_normalized[1], "GEN", 
+               fontsize=12, ha='center', va='center', 
+               fontweight='bold', color='white',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='red', 
+                        edgecolor='black', linewidth=2, alpha=0.9),
+               zorder=6)
+    
     ax.set_xlabel("z1 (Dimensión Latente 1)", fontsize=13, fontweight='bold')
     ax.set_ylabel("z2 (Dimensión Latente 2)", fontsize=13, fontweight='bold')
     ax.set_title(config_name.replace('_', ' '), fontsize=14, fontweight='bold', pad=15)
@@ -282,6 +380,10 @@ def _plot_latent_on_axis(ax, latent: np.ndarray, labels: np.ndarray,
     ax.set_ylim(-0.05, 1.05)
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
     ax.set_aspect('equal', adjustable='box')
+    
+    # Agregar leyenda si hay punto destacado
+    if highlight_point is not None:
+        ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
     
     # Agregar fondo ligeramente coloreado para mejor visualización
     ax.set_facecolor('#fafafa')
