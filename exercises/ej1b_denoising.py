@@ -157,7 +157,8 @@ def plot_denoising_performance(metrics_dict, fname=None):
 
 def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict, 
                          char_indices=None, fname=None, shape=(7, 5),
-                         threshold: Optional[float] = None):
+                         threshold: Optional[float] = None,
+                         X_noisy_dict: Optional[dict] = None):
     """
     Plot grid showing same characters at different noise levels.
     
@@ -187,7 +188,10 @@ def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict,
 
     for i, noise_level in enumerate(sorted(noise_levels)):
         X_denoised = X_denoised_dict[noise_level]
-        X_noisy = add_noise(X_original, noise_level=noise_level, seed=42)
+        if X_noisy_dict is not None:
+            X_noisy = X_noisy_dict[noise_level]
+        else:
+            X_noisy = add_noise(X_original, noise_level=noise_level, seed=42)
         X_noisy_plot = X_noisy  # mostrar el ruido con sus intensidades reales
         X_denoised_plot = _binarize(X_denoised, threshold)
         
@@ -223,8 +227,9 @@ def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict,
 
 
 def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300, 
-                               deep=True, batch_size=4, lr=0.01, scale="-11",
-                               seed=42):
+                               deep=True, batch_size=4, lr=0.01, scale="01",
+                               seed=42, noise_mode: str = "gaussian",
+                               salt_pepper_ratio: float = 0.05):
     """
     Systematic study of denoising autoencoder across different noise levels.
     
@@ -234,7 +239,7 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
     - Activations: TANH for hidden layers, TANH/SIGMOID for output
     
     Args:
-        noise_levels: List of noise levels to test (default: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+        noise_levels: List of noise levels to test (default: [0.1, 0.2, 0.3, 0.4, 0.5])
         latent_dim: Latent space dimension
         epochs: Training epochs per noise level
         deep: Use hidden layer (16 neurons) if True, else direct encoding
@@ -242,12 +247,18 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
         lr: Learning rate
         scale: Data scale ("-11" for [-1,1] or "01" for [0,1])
         seed: Random seed for reproducibility
+        noise_mode: 'gaussian' (default) or 'salt_pepper'
+        salt_pepper_ratio: probability of flipping pixels (used when noise_mode='salt_pepper')
         
     Returns:
         Dictionary with complete study results
     """
     if noise_levels is None:
-        noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+        noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5]
+    else:
+        noise_levels = [nl for nl in noise_levels if nl > 0]
+        if not noise_levels:
+            raise ValueError("Provide at least one noise level > 0 for denoising.")
     
     os.makedirs("outputs", exist_ok=True)
     
@@ -263,20 +274,27 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
     print(f"  Decoder: [{latent_dim}] → {'[16] → ' if deep else ''}[35]")
     print(f"Noise levels: {noise_levels}")
     print(f"Epochs per level: {epochs}")
+    if noise_mode == "salt_pepper":
+        print(f"Noise mode: {noise_mode} (ratio={salt_pepper_ratio})")
+    else:
+        print(f"Noise mode: {noise_mode}")
     print("=" * 60)
     
     results = {}
     X_denoised_dict = {}
+    X_noisy_eval_dict = {}
     
     # Study each noise level
     for noise_level in noise_levels:
         print(f"\n--- Training at noise level σ={noise_level:.2f} ---")
         
-        # Prepare noisy data
-        X_noisy = add_noise(X, noise_level=noise_level, seed=seed)
+        # Prepare noisy data generators
+        offset = int(noise_level * 10_000)
+        train_rng = np.random.default_rng(seed + offset)
+        eval_rng = np.random.default_rng(seed + 10_000 + offset)
         
         # Configure architecture
-        hidden = [16] if deep else []
+        hidden = [20, 10] if deep else []
         out_act = SIGMOID if scale == "01" else TANH
         encoder_acts = [TANH] * (len(hidden) + 1)
         decoder_acts = ([TANH] * len(hidden)) + [out_act]
@@ -296,25 +314,43 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
         )
         
         # Train with noisy input, clean target
-        losses = autoencoder.fit(
-            X_noisy, X,  # Noisy input, clean target
-            epochs=epochs,
-            batch_size=batch_size,
-            shuffle=True,
-            verbose=False
-        )
+        losses = []
+        for _ in range(epochs):
+            X_noisy_epoch = add_noise(
+                X,
+                noise_level=noise_level,
+                rng=train_rng,
+                mode=noise_mode,
+                salt_pepper_ratio=salt_pepper_ratio
+            )
+            epoch_loss = autoencoder.fit(
+                X_noisy_epoch, X,  # Noisy input, clean target
+                epochs=1,
+                batch_size=batch_size,
+                shuffle=True,
+                verbose=False
+            )
+            losses.extend(epoch_loss)
         
         # Evaluate denoising performance
-        metrics = evaluate_denoising(autoencoder, X, X_noisy, threshold)
+        X_noisy_eval = add_noise(
+            X,
+            noise_level=noise_level,
+            rng=eval_rng,
+            mode=noise_mode,
+            salt_pepper_ratio=salt_pepper_ratio
+        )
+        metrics = evaluate_denoising(autoencoder, X, X_noisy_eval, threshold)
         metrics["training_loss"] = losses
         metrics["final_loss"] = float(losses[-1]) if losses else None
         
         results[noise_level] = metrics
-        X_denoised_dict[noise_level] = autoencoder.predict(X_noisy)
+        X_noisy_eval_dict[noise_level] = X_noisy_eval
+        X_denoised_dict[noise_level] = autoencoder.predict(X_noisy_eval)
         
         # Plot comparison for this noise level
         plot_denoising_comparison(
-            X, X_noisy, X_denoised_dict[noise_level], noise_level,
+            X, X_noisy_eval, X_denoised_dict[noise_level], noise_level,
             fname=f"denoising_comparison_noise_{noise_level:.2f}.png",
             threshold=threshold
         )
@@ -336,7 +372,8 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
     plot_denoising_performance(results, "denoising_performance_curves.png")
     plot_noise_level_grid(X, noise_levels, X_denoised_dict, 
                          fname="denoising_grid_all_levels.png",
-                         threshold=threshold)
+                         threshold=threshold,
+                         X_noisy_dict=X_noisy_eval_dict)
     
     # Save comprehensive report
     report = {
