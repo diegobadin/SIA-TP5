@@ -12,6 +12,7 @@ import json
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 from src.vae import VAE, reparameterize, kl_divergence_loss
 from src.mlp.activations import TANH, SIGMOID
@@ -60,29 +61,60 @@ def plot_vae_training_curves(history, fname=None):
 
 def visualize_latent_space(vae, X, labels, fname=None):
     """
-    Visualize dataset in latent space using mean μ.
-    
-    Args:
-        vae: Trained VAE
-        X: Input data
-        labels: Data labels
-        fname: Output filename
+    Visualize dataset in latent space using mean �.
+
+    If the latent space has more than 2 dimensions, the two dimensions with the
+    highest variance are selected to provide the most informative 2D projection.
+    Additionally, the emoji image for each sample is plotted at its latent
+    position to observe grouping visually.
     """
     mu = vae.get_latent_representation(X)
-    
-    if vae.latent_dim == 2:
-        plt.figure(figsize=(10, 10))
-        scatter = plt.scatter(mu[:, 0], mu[:, 1], c=labels, cmap="tab10", 
-                             alpha=0.6, s=100, edgecolors="black", linewidths=0.5)
-        plt.colorbar(scatter, label="Class")
-        plt.xlabel("μ₁ (Latent Dimension 1)")
-        plt.ylabel("μ₂ (Latent Dimension 2)")
-        plt.title("VAE Latent Space (Mean μ)")
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        if fname:
-            os.makedirs("outputs", exist_ok=True)
-            plt.savefig(f"outputs/{fname}", dpi=140)
+
+    if vae.latent_dim < 2:
+        print(f"Latent dimension is {vae.latent_dim}, cannot visualize directly.")
+        return
+
+    if vae.latent_dim > 2:
+        variances = np.var(mu, axis=0)
+        top_dims = np.argsort(variances)[::-1][:2]
+        mu_to_plot = mu[:, top_dims]
+        dim_labels = (top_dims[0], top_dims[1])
+    else:
+        mu_to_plot = mu
+        dim_labels = (0, 1)
+
+    img_size = int(np.sqrt(X.shape[1]))
+    images = X.reshape(-1, img_size, img_size)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    scatter = ax.scatter(
+        mu_to_plot[:, 0],
+        mu_to_plot[:, 1],
+        c=labels,
+        cmap="tab10",
+        alpha=0.25,
+        s=80,
+        edgecolors="black",
+        linewidths=0.4,
+    )
+    for (x_coord, y_coord), img in zip(mu_to_plot, images):
+        ab = AnnotationBbox(
+            OffsetImage(img, cmap="gray_r", zoom=0.5),
+            (x_coord, y_coord),
+            frameon=False,
+            pad=0.0,
+        )
+        ax.add_artist(ab)
+
+    plt.colorbar(scatter, label="Class")
+    plt.xlabel(f"z{dim_labels[0]} (Latent Dimension {dim_labels[0] + 1})")
+    plt.ylabel(f"z{dim_labels[1]} (Latent Dimension {dim_labels[1] + 1})")
+    plt.title("VAE Latent Space (Mean �)")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if fname:
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/{fname}", dpi=140)
         plt.close()
     else:
         print(f"Latent dimension is {vae.latent_dim}, cannot visualize directly.")
@@ -321,4 +353,5 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 

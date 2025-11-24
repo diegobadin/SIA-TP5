@@ -15,7 +15,7 @@ EXPERIMENT_CONFIGS = [
     {
         "name": "A_recon_strong",
         "description": "Casi AE clásico: prioriza reconstrucción",
-        "latent_dim": 4,
+        "latent_dim": 2,
         "beta": 0.0,
         "encoder_hidden": [64, 32],
         "decoder_hidden": [32, 64],
@@ -39,7 +39,7 @@ EXPERIMENT_CONFIGS = [
     {
         "name": "C_prior_strong",
         "description": "Prior fuerte: espacio latente más gaussiano",
-        "latent_dim": 4,
+        "latent_dim": 2,
         "beta": 1.0,
         "encoder_hidden": [32, 16],
         "decoder_hidden": [16, 32],
@@ -47,19 +47,7 @@ EXPERIMENT_CONFIGS = [
         "batch_size": 4,
         "lr": 0.001,
         "seed": 42,
-    },
-    {
-        "name": "D_overreg",
-        "description": "Ejemplo sobre-regularizado (qué NO hacer)",
-        "latent_dim": 2,
-        "beta": 2.0,
-        "encoder_hidden": [16],
-        "decoder_hidden": [16],
-        "epochs": 1000,
-        "batch_size": 4,
-        "lr": 0.001,
-        "seed": 42,
-    },
+    }
 ]
 
 def plot_reconstructions(vae, X, n_samples=8, img_shape=(16, 16), fname=None):
@@ -177,8 +165,8 @@ def run_experiments():
         # 1) Curvas de entrenamiento
         plot_vae_training_curves(hist, fname=f"{base_fname}_training.png")
 
-        # 2) Espacio latente (si dim=2)
-        if vae.latent_dim == 2:
+        # 2) Espacio latente (proyectado a 2 dims si es mayor)
+        if vae.latent_dim >= 2:
             visualize_latent_space(
                 vae, X, labels, fname=f"{base_fname}_latent.png"
             )
