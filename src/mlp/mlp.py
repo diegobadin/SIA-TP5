@@ -94,6 +94,34 @@ class MLP:
             layer.weights -= step   # regla consistente (W -= lr * grad-like)
         return self.loss.value(y_hat, y)
 
+    def backprop_to_input(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        """
+        Backpropagate to get gradient at input layer without updating weights.
+        
+        Args:
+            x: Input data (input_dim,) or (n_samples, input_dim)
+            y: Target data (output_dim,) or (n_samples, output_dim)
+            
+        Returns:
+            Gradient at input: ∂L/∂x (same shape as x)
+        """
+        zs, acts = self._forward_full(x)
+        y_hat = acts[-1]
+        delta = self.loss.delta_out(y_hat, y, zs[-1], self.layers[-1].activation)
+        
+        deltas: List[np.ndarray] = [None] * len(self.layers)  # type: ignore
+        deltas[-1] = delta
+        for l in reversed(range(len(self.layers)-1)):
+            deltas[l] = self.layers[l].backprop_delta(deltas[l+1], self.layers[l+1].weights)
+        
+        # Get gradient at input: backprop through first layer
+        if len(self.layers) > 0:
+            # Gradient w.r.t. input = W^T @ delta (without activation derivative at input)
+            W0 = self.layers[0].weights[:, 1:]  # Remove bias column
+            delta_input = W0.T @ deltas[0]
+            return delta_input
+        return delta
+
     def fit(self, X: np.ndarray, Y: np.ndarray, epochs: int = 100,
             batch_size: int = 1, shuffle: bool = True, verbose: bool = False,
             validation_fn: Optional[Callable[[np.ndarray, np.ndarray, 'MLP'], float]] = None,

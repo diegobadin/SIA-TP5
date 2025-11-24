@@ -143,9 +143,12 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     }
     
     # Paso 5: Graficar comparación (muestra el resultado visual)
-    plot_generation_results(X_new, nearest_char, char_idx1, char_idx2, X,
-                           f"Resultados de Generación (α={alpha})",
-                           f"outputs/{output_prefix}_comparison.png")
+    plot_generation_results(
+        X_new, nearest_char, char_idx1, char_idx2, X,
+        f"Resultados de Generación (α={alpha})",
+        f"outputs/{output_prefix}_comparison.png",
+        threshold=threshold
+    )
     
     # Paso 6: Graficar espacio latente con punto generado resaltado (muestra dónde está en el espacio)
     plot_latent_space_with_generated(
@@ -214,6 +217,7 @@ def run(latent_dim=2, noise_level=0.0):
     max_pixel_error = 1.0
     
     X, labels = parse_font_h(scale=scale)
+    threshold = 0.0 if scale == "-11" else 0.5
     X_in = add_noise(X, noise_level=noise_level, seed=42) if noise_level > 0 else X
 
     autoencoder = Autoencoder(
@@ -245,8 +249,8 @@ def run(latent_dim=2, noise_level=0.0):
 
     # Graficos básicos
     plot_loss(losses, loss_name="MSE", title="Autoencoder - Loss", fname="autoencoder_loss.png")
-    plot_grid(X, "Originales", fname="autoencoder_originals.png")
-    plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png")
+    plot_grid(X, "Originales", fname="autoencoder_originals.png", threshold=threshold)
+    plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png", threshold=threshold)
 
     # Reporte rápido
     final_loss = losses[-1] if losses else None

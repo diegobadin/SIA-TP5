@@ -13,7 +13,17 @@ import os
 from typing import Dict, List, Any, Optional
 
 
-def plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8):
+def _apply_threshold(X: np.ndarray, threshold: Optional[float]) -> np.ndarray:
+    """
+    Binariza los valores usando el threshold dado. Si threshold es None,
+    devuelve los datos originales.
+    """
+    if threshold is None:
+        return X
+    return np.where(X > threshold, 1.0, 0.0)
+
+
+def plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8, threshold: Optional[float] = None):
     """
     Plot a grid of characters/images.
     
@@ -28,9 +38,10 @@ def plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8):
     n_cols = min(n_cols, n)
     n_rows = int(np.ceil(n / n_cols))
     plt.figure(figsize=(n_cols * 1.2, n_rows * 1.4))
+    X_plot = _apply_threshold(X, threshold)
     for i in range(n):
         plt.subplot(n_rows, n_cols, i + 1)
-        plt.imshow(X[i].reshape(shape), cmap="gray_r")
+        plt.imshow(X_plot[i].reshape(shape), cmap="gray_r")
         plt.axis("off")
     plt.suptitle(title)
     plt.tight_layout()
@@ -507,7 +518,8 @@ def plot_pixel_error_comparison_table(autoencoders: Dict[str, Any], X: np.ndarra
 
 
 def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, char_idx2, 
-                           X_train, title, fname=None, shape=(7, 5)):
+                           X_train, title, fname=None, shape=(7, 5),
+                           threshold: Optional[float] = None):
     """
     Plot generated character and nearest neighbor comparison.
     
@@ -521,25 +533,28 @@ def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, ch
         fname: Output filename (optional)
         shape: Shape to reshape characters for display
     """
+    gen_plot = _apply_threshold(generated_char, threshold)
+    nn_plot = _apply_threshold(nearest_neighbor_char, threshold)
+    X_plot = _apply_threshold(X_train, threshold)
     fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     
     # Original character 1
-    axes[0].imshow(X_train[char_idx1].reshape(shape), cmap="gray_r")
+    axes[0].imshow(X_plot[char_idx1].reshape(shape), cmap="gray_r")
     axes[0].set_title(f"Char {char_idx1}\n(original)")
     axes[0].axis("off")
     
     # Generated character
-    axes[1].imshow(generated_char.reshape(shape), cmap="gray_r")
+    axes[1].imshow(gen_plot.reshape(shape), cmap="gray_r")
     axes[1].set_title(f"Generated\n(interp: {char_idx1}→{char_idx2})")
     axes[1].axis("off")
     
     # Original character 2
-    axes[2].imshow(X_train[char_idx2].reshape(shape), cmap="gray_r")
+    axes[2].imshow(X_plot[char_idx2].reshape(shape), cmap="gray_r")
     axes[2].set_title(f"Char {char_idx2}\n(original)")
     axes[2].axis("off")
     
     # Nearest neighbor
-    axes[3].imshow(nearest_neighbor_char.reshape(shape), cmap="gray_r")
+    axes[3].imshow(nn_plot.reshape(shape), cmap="gray_r")
     axes[3].set_title("Nearest Neighbor\n(from training)")
     axes[3].axis("off")
     

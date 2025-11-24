@@ -12,6 +12,7 @@ import json
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 from src.vae import VAE, reparameterize, kl_divergence_loss
 from src.mlp.activations import TANH, SIGMOID
@@ -60,29 +61,60 @@ def plot_vae_training_curves(history, fname=None):
 
 def visualize_latent_space(vae, X, labels, fname=None):
     """
-    Visualize dataset in latent space using mean μ.
-    
-    Args:
-        vae: Trained VAE
-        X: Input data
-        labels: Data labels
-        fname: Output filename
+    Visualize dataset in latent space using mean �.
+
+    If the latent space has more than 2 dimensions, the two dimensions with the
+    highest variance are selected to provide the most informative 2D projection.
+    Additionally, the emoji image for each sample is plotted at its latent
+    position to observe grouping visually.
     """
     mu = vae.get_latent_representation(X)
-    
-    if vae.latent_dim == 2:
-        plt.figure(figsize=(10, 10))
-        scatter = plt.scatter(mu[:, 0], mu[:, 1], c=labels, cmap="tab10", 
-                             alpha=0.6, s=100, edgecolors="black", linewidths=0.5)
-        plt.colorbar(scatter, label="Class")
-        plt.xlabel("μ₁ (Latent Dimension 1)")
-        plt.ylabel("μ₂ (Latent Dimension 2)")
-        plt.title("VAE Latent Space (Mean μ)")
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        if fname:
-            os.makedirs("outputs", exist_ok=True)
-            plt.savefig(f"outputs/{fname}", dpi=140)
+
+    if vae.latent_dim < 2:
+        print(f"Latent dimension is {vae.latent_dim}, cannot visualize directly.")
+        return
+
+    if vae.latent_dim > 2:
+        variances = np.var(mu, axis=0)
+        top_dims = np.argsort(variances)[::-1][:2]
+        mu_to_plot = mu[:, top_dims]
+        dim_labels = (top_dims[0], top_dims[1])
+    else:
+        mu_to_plot = mu
+        dim_labels = (0, 1)
+
+    img_size = int(np.sqrt(X.shape[1]))
+    images = X.reshape(-1, img_size, img_size)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    scatter = ax.scatter(
+        mu_to_plot[:, 0],
+        mu_to_plot[:, 1],
+        c=labels,
+        cmap="tab10",
+        alpha=0.25,
+        s=80,
+        edgecolors="black",
+        linewidths=0.4,
+    )
+    for (x_coord, y_coord), img in zip(mu_to_plot, images):
+        ab = AnnotationBbox(
+            OffsetImage(img, cmap="gray_r", zoom=0.5),
+            (x_coord, y_coord),
+            frameon=False,
+            pad=0.0,
+        )
+        ax.add_artist(ab)
+
+    plt.colorbar(scatter, label="Class")
+    plt.xlabel(f"z{dim_labels[0]} (Latent Dimension {dim_labels[0] + 1})")
+    plt.ylabel(f"z{dim_labels[1]} (Latent Dimension {dim_labels[1] + 1})")
+    plt.title("VAE Latent Space (Mean �)")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if fname:
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/{fname}", dpi=140)
         plt.close()
     else:
         print(f"Latent dimension is {vae.latent_dim}, cannot visualize directly.")
@@ -134,14 +166,90 @@ def plot_generated_samples(vae, X_train, n_generated=16, img_shape=(16, 16), fna
     plt.close()
 
 
+def plot_all_dataset_emojis(vae, X_train, labels, img_shape=(16, 16), fname=None):
+    """
+    Plot all emojis from the dataset with their VAE reconstructions.
+    
+    Args:
+        vae: Trained VAE
+        X_train: Training samples (all emojis)
+        labels: Data labels
+        img_shape: Image shape (height, width)
+        fname: Output filename
+    """
+    # Get reconstructions for all training samples
+    # forward() returns (x_recon, mu, log_var, z)
+    X_recon, _, _, _ = vae.forward(X_train)
+    
+    # Determine grid layout: 8 columns × 4 rows (16 emojis total)
+    # Row 1: Original emojis 0-7
+    # Row 2: Original emojis 8-15
+    # Row 3: Reconstructed emojis 0-7
+    # Row 4: Reconstructed emojis 8-15
+    n_emojis = len(X_train)
+    n_cols = 8
+    n_rows = 4
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 8))
+    
+    # Handle case where axes might be 1D
+    if n_rows == 1:
+        axes = axes.reshape(1, -1)
+    if n_cols == 1:
+        axes = axes.reshape(-1, 1)
+    
+    # Row 1: Original emojis 0-7
+    for i in range(n_cols):
+        if i < n_emojis:
+            axes[0, i].imshow(X_train[i].reshape(img_shape), cmap="gray_r")
+            axes[0, i].set_title(f"Emoji {i}", fontsize=8)
+        axes[0, i].axis("off")
+    
+    # Row 2: Original emojis 8-15
+    for i in range(n_cols):
+        emoji_idx = i + n_cols
+        if emoji_idx < n_emojis:
+            axes[1, i].imshow(X_train[emoji_idx].reshape(img_shape), cmap="gray_r")
+            axes[1, i].set_title(f"Emoji {emoji_idx}", fontsize=8)
+        axes[1, i].axis("off")
+    
+    # Row 3: Reconstructed emojis 0-7
+    for i in range(n_cols):
+        if i < n_emojis:
+            axes[2, i].imshow(X_recon[i].reshape(img_shape), cmap="gray_r")
+        axes[2, i].axis("off")
+    
+    # Row 4: Reconstructed emojis 8-15
+    for i in range(n_cols):
+        emoji_idx = i + n_cols
+        if emoji_idx < n_emojis:
+            axes[3, i].imshow(X_recon[emoji_idx].reshape(img_shape), cmap="gray_r")
+        axes[3, i].axis("off")
+    
+    # Add row labels
+    fig.text(0.02, 0.875, "Original", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.625, "Original", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.375, "Reconstructed", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.125, "Reconstructed", rotation=90, fontsize=12, va='center', ha='center')
+    
+    plt.suptitle("All Dataset Emojis: Original (rows 1-2) vs VAE Reconstruction (rows 3-4)", fontsize=14)
+    plt.tight_layout(rect=[0.03, 0, 1, 1])  # Leave space for row labels
+    if fname:
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/{fname}", dpi=140)
+    plt.close()
+
+
 def train_vae_simple(X, latent_dim=2, epochs=200, beta=1.0, 
                     batch_size=4, lr=0.001, seed=42):
     """
-    Simplified VAE training that works with existing framework.
+    VAE training with proper backpropagation.
     
-    This uses a simplified training approach where we:
-    1. Train decoder on reconstruction
-    2. Train encoder with KL regularization
+    This uses proper VAE training where:
+    1. Reconstruction loss flows backward through decoder → ∂L_recon/∂z
+    2. Gradients flow through reparameterization → ∂L_recon/∂μ, ∂L_recon/∂log_var
+    3. KL loss directly affects encoder → ∂L_KL/∂μ, ∂L_KL/∂log_var
+    4. Combined gradients backprop through encoder
     """
     input_dim = X.shape[1]
     
@@ -159,61 +267,8 @@ def train_vae_simple(X, latent_dim=2, epochs=200, beta=1.0,
         seed=seed
     )
     
-    # Simplified training: alternate between decoder and encoder updates
-    n_samples = len(X)
-    indices = np.arange(n_samples)
-    rng = np.random.default_rng(seed)
-    
-    for epoch in range(epochs):
-        rng.shuffle(indices)
-        
-        epoch_recon = []
-        epoch_kl = []
-        epoch_total = []
-        
-        for i in range(0, n_samples, batch_size):
-            batch_idx = indices[i:i+batch_size]
-            x_batch = X[batch_idx]
-            
-            # Forward
-            mu, log_var = vae.encoder.encode(x_batch)
-            z = reparameterize(mu, log_var, rng=rng)
-            x_recon = vae.decoder.decode(z)
-            
-            # Losses
-            recon_loss = MSELoss().value(x_recon, x_batch)
-            kl_loss = kl_divergence_loss(mu, log_var)
-            total_loss = recon_loss + beta * kl_loss
-            
-            epoch_recon.append(recon_loss)
-            epoch_kl.append(kl_loss)
-            epoch_total.append(total_loss)
-            
-            # Update decoder: train on (z, x) pairs for reconstruction
-            # Use decoder's MLP fit method (simplified but works)
-            # Train decoder for 1 epoch on this batch
-            vae.decoder.mlp.fit(z, x_batch, epochs=1, batch_size=len(x_batch), 
-                               shuffle=False, verbose=False)
-            
-            # Encoder update: simplified approach
-            # In a full VAE, we'd properly backprop through reparameterization
-            # For now, we'll update encoder components using gradient approximations
-            # This is a simplified training - a full implementation would compute
-            # proper gradients through the reparameterization trick
-            
-            # Note: The encoder will learn through the reconstruction signal
-            # that flows back through z, even if not perfectly optimized
-            # The KL term provides regularization
-        
-        vae.history["reconstruction_loss"].append(np.mean(epoch_recon))
-        vae.history["kl_loss"].append(np.mean(epoch_kl))
-        vae.history["total_loss"].append(np.mean(epoch_total))
-        
-        if (epoch + 1) % 20 == 0:
-            print(f"Epoch {epoch+1}/{epochs} - "
-                  f"Recon: {np.mean(epoch_recon):.6f}, "
-                  f"KL: {np.mean(epoch_kl):.6f}, "
-                  f"Total: {np.mean(epoch_total):.6f}")
+    # Train using proper VAE backpropagation
+    vae.fit(X, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=True)
     
     return vae
 
@@ -241,8 +296,8 @@ def run():
     vae = train_vae_simple(
         X, 
         latent_dim=2,
-        epochs=200,
-        beta=1.0,
+        epochs=1000,
+        beta=1,
         batch_size=4,
         lr=0.001,
         seed=42
@@ -256,13 +311,18 @@ def run():
     print("\n4. Visualizing latent space...")
     visualize_latent_space(vae, X, labels, "vae_latent_space.png")
     
+    # Show all dataset emojis with reconstructions
+    print("\n5. Plotting all dataset emojis with reconstructions...")
+    plot_all_dataset_emojis(vae, X, labels, img_shape=img_shape, 
+                            fname="vae_all_emojis_reconstruction.png")
+    
     # Generate new samples
-    print("\n5. Generating new samples...")
+    print("\n6. Generating new samples...")
     plot_generated_samples(vae, X, n_generated=16, img_shape=img_shape, 
                           fname="vae_generated_samples.png")
     
     # Save report
-    print("\n6. Saving results...")
+    print("\n7. Saving results...")
     report = {
         "architecture": {
             "input_dim": vae.input_dim,
@@ -272,7 +332,7 @@ def run():
         },
         "training": {
             "epochs": 200,
-            "beta": 1.0,
+            "beta": 0.1,
             "final_reconstruction_loss": vae.history["reconstruction_loss"][-1],
             "final_kl_loss": vae.history["kl_loss"][-1],
             "final_total_loss": vae.history["total_loss"][-1]
@@ -293,4 +353,5 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 

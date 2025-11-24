@@ -11,11 +11,12 @@ This module implements a VAE with:
 from __future__ import annotations
 from typing import List, Sequence, Optional, Tuple
 import numpy as np
+import copy
 
 from src.mlp.mlp import MLP
-from src.mlp.activations import Activation, TANH, SIGMOID
+from src.mlp.activations import Activation, TANH, SIGMOID, IDENTITY
 from src.mlp.erorrs import Loss, MSELoss
-from src.mlp.optimizers import Optimizer
+from src.mlp.optimizers import Optimizer, Adam, SGD, Momentum
 
 
 def reparameterize(mu: np.ndarray, log_var: np.ndarray, 
@@ -63,6 +64,28 @@ def kl_divergence_loss(mu: np.ndarray, log_var: np.ndarray) -> float:
     return float(np.mean(kl))
 
 
+def _clone_optimizer(optimizer: Optimizer) -> Optimizer:
+    """
+    Create a new optimizer instance with the same parameters.
+    
+    Args:
+        optimizer: Original optimizer instance
+        
+    Returns:
+        New optimizer instance with same parameters
+    """
+    if isinstance(optimizer, Adam):
+        return Adam(lr=optimizer.lr, beta1=optimizer.b1, beta2=optimizer.b2, eps=optimizer.eps)
+    elif isinstance(optimizer, SGD):
+        return SGD(lr=optimizer.lr)
+    elif isinstance(optimizer, Momentum):
+        return Momentum(lr=optimizer.lr, beta=optimizer.beta)
+    else:
+        # Fallback: try to create with same parameters
+        # This handles custom optimizers
+        return copy.deepcopy(optimizer)
+
+
 class VariationalEncoder:
     """
     Variational encoder that outputs distribution parameters (μ, log_var).
@@ -98,11 +121,16 @@ class VariationalEncoder:
                 # If fewer activations, pad with TANH
                 base_acts = list(activations) + [TANH] * (len(hidden_layers) - len(activations))
         
+        # Create separate optimizer instances for each MLP to avoid shape conflicts
+        optimizer_base = _clone_optimizer(optimizer)
+        optimizer_mu = _clone_optimizer(optimizer)
+        optimizer_log_var = _clone_optimizer(optimizer)
+        
         self.base_mlp = MLP(
             layer_sizes=base_sizes,
             activations=base_acts,
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_base,
             w_init_scale=w_init_scale,
             seed=seed
         )
@@ -112,18 +140,18 @@ class VariationalEncoder:
         
         self.mu_head = MLP(
             layer_sizes=[hidden_dim, latent_dim],
-            activations=[TANH],  # Linear output (no activation on mu)
+            activations=[IDENTITY], # IDENTITY: linear output for μ, regularization is handled by the KL term
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_mu,
             w_init_scale=w_init_scale,
             seed=seed
         )
         
         self.log_var_head = MLP(
             layer_sizes=[hidden_dim, latent_dim],
-            activations=[TANH],  # Linear output (no activation on log_var)
+            activations=[IDENTITY], # IDENTITY: linear output for log σ²
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_log_var,
             w_init_scale=w_init_scale,
             seed=seed
         )
@@ -273,11 +301,13 @@ class VAE:
     def fit(self, X: np.ndarray, epochs: int = 100, batch_size: int = 1,
             shuffle: bool = True, verbose: bool = False) -> dict:
         """
-        Train the VAE using alternating updates.
+        Train the VAE using proper backpropagation.
         
         Strategy:
-        1. Train decoder on reconstruction (using z from encoder)
-        2. Train encoder on combined loss (reconstruction + KL)
+        1. Backprop reconstruction loss through decoder → get ∂L_recon/∂z
+        2. Flow gradients through reparameterization → get ∂L_recon/∂μ, ∂L_recon/∂log_var
+        3. Compute KL gradients directly on encoder → get ∂L_KL/∂μ, ∂L_KL/∂log_var
+        4. Combine gradients and backprop through encoder
         
         Args:
             X: Training data (n_samples, input_dim) in range [0, 1]
@@ -304,12 +334,13 @@ class VAE:
                 batch_indices = indices[i:i+batch_size]
                 x_batch = X[batch_indices]
                 
-                # Forward pass
+                # Forward pass to compute losses
                 mu, log_var = self.encoder.encode(x_batch)
-                z = reparameterize(mu, log_var, rng=self.rng)
+                epsilon = self.rng.normal(0, 1, size=mu.shape)
+                z = reparameterize(mu, log_var, epsilon=epsilon, rng=self.rng)
                 x_recon = self.decoder.decode(z)
                 
-                # Compute losses
+                # Compute losses for logging
                 recon_loss_val = self.reconstruction_loss.value(x_recon, x_batch)
                 kl_loss_val = kl_divergence_loss(mu, log_var)
                 total_loss = recon_loss_val + self.beta * kl_loss_val
@@ -318,21 +349,8 @@ class VAE:
                 epoch_kl_loss.append(kl_loss_val)
                 epoch_total_loss.append(total_loss)
                 
-                # Update decoder: train on reconstruction
-                # Use decoder's MLP fit for one step (simplified)
-                # In practice, we'd do proper backprop
-                # For now, we'll use the decoder's internal update mechanism
-                
-                # Update encoder: need to handle KL + reconstruction gradient
-                # This requires custom gradient computation
-                # Simplified: update encoder base and heads separately
-                
-                # Decoder update: standard reconstruction
-                # We'll approximate by doing a gradient step on decoder
-                self._update_decoder(x_batch, z, x_recon)
-                
-                # Encoder update: KL regularization + reconstruction signal
-                self._update_encoder(x_batch, mu, log_var, z, x_recon)
+                # Perform proper backpropagation step
+                self._train_step(x_batch)
             
             # Record epoch averages
             self.history["reconstruction_loss"].append(np.mean(epoch_recon_loss))
@@ -347,98 +365,260 @@ class VAE:
         
         return self.history
     
+    def _backprop_decoder(self, x: np.ndarray, z: np.ndarray, x_recon: np.ndarray) -> np.ndarray:
+        """
+        Backpropagate reconstruction loss through decoder to get gradient w.r.t. z.
+        
+        Args:
+            x: Target (original input)
+            z: Decoder input (latent code)
+            x_recon: Decoder output (reconstruction)
+            
+        Returns:
+            Gradient w.r.t. z: ∂L_recon/∂z
+        """
+        # Use decoder's backprop_to_input method
+        if z.ndim == 1:
+            delta_z = self.decoder.mlp.backprop_to_input(z, x)
+        else:
+            # Handle batch: backprop each sample
+            delta_z_list = []
+            for i in range(len(z)):
+                delta_z_list.append(self.decoder.mlp.backprop_to_input(z[i], x[i]))
+            delta_z = np.array(delta_z_list)
+        return delta_z
+    
+    def _reparameterization_gradients(self, delta_z: np.ndarray, mu: np.ndarray, 
+                                      log_var: np.ndarray, epsilon: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute gradients through reparameterization: z = μ + σ * ε
+        
+        Args:
+            delta_z: ∂L_recon/∂z (from decoder backprop)
+            mu: Mean vectors
+            log_var: Log-variance vectors
+            epsilon: Random samples used in reparameterization
+            
+        Returns:
+            Tuple (∂L_recon/∂μ, ∂L_recon/∂log_var)
+        """
+        sigma = np.exp(0.5 * log_var)
+        
+        # ∂z/∂μ = 1, so ∂L_recon/∂μ = ∂L_recon/∂z
+        delta_mu_recon = delta_z
+        
+        # ∂z/∂log_var = 0.5 * σ * ε
+        # So ∂L_recon/∂log_var = (∂L_recon/∂z) * (0.5 * σ * ε)
+        delta_log_var_recon = delta_z * 0.5 * sigma * epsilon
+        
+        return delta_mu_recon, delta_log_var_recon
+    
+    def _kl_gradients(self, mu: np.ndarray, log_var: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute KL divergence gradients directly on encoder outputs.
+        
+        KL = -0.5 * Σ(1 + log_var - μ² - exp(log_var))
+        
+        Args:
+            mu: Mean vectors
+            log_var: Log-variance vectors
+            
+        Returns:
+            Tuple (∂L_KL/∂μ, ∂L_KL/∂log_var)
+        """
+        # ∂L_KL/∂μ = μ
+        delta_mu_kl = mu
+        
+        # ∂L_KL/∂log_var = 0.5 * (exp(log_var) - 1)
+        delta_log_var_kl = 0.5 * (np.exp(log_var) - 1)
+        
+        return delta_mu_kl, delta_log_var_kl
+    
     def _update_decoder(self, x: np.ndarray, z: np.ndarray, x_recon: np.ndarray):
         """Update decoder using reconstruction loss."""
-        # Decoder can be trained as standard MLP: input z, target x
-        # Use decoder's fit method for one step
-        # Note: This creates a new training loop, so we'll do it manually
-        # For efficiency, we'll use the decoder's internal update mechanism
+        # Update decoder weights using standard backpropagation
+        if z.ndim == 1:
+            self.decoder.mlp._backward_update(z, x)
+        else:
+            # Batch update: update each sample
+            for i in range(len(z)):
+                self.decoder.mlp._backward_update(z[i], x[i])
+    
+    def _backprop_encoder(self, x: np.ndarray, delta_mu_total: np.ndarray, 
+                         delta_log_var_total: np.ndarray):
+        """
+        Backpropagate combined gradients through encoder and update weights.
         
-        # Get reconstruction gradient
-        recon_delta = self.reconstruction_loss.delta_out(
-            x_recon, x, 
-            z,  # Approximate z as decoder input
-            SIGMOID
-        )
+        Args:
+            x: Input data
+            delta_mu_total: Combined gradient w.r.t. μ (recon + KL)
+            delta_log_var_total: Combined gradient w.r.t. log_var (recon + KL)
+        """
+        # Forward through base to get hidden representation
+        if x.ndim == 1:
+            h = self.encoder.base_mlp.forward(x)
+        else:
+            h = self.encoder.base_mlp.predict(x)
         
-        # Backprop through decoder (simplified - would need full implementation)
-        # For now, we'll use decoder's fit method which handles this
-        # But fit expects batches, so we'll call it with single-step training
-        pass  # Decoder update handled in fit method
+        # Backprop through mu_head to get gradient w.r.t. h from mu branch
+        # We need to manually backpropagate delta_mu_total through mu_head
+        if h.ndim == 1:
+            # Single sample: use backprop_to_input with a dummy target
+            # Actually, we need to manually compute gradient w.r.t. h
+            # Let's use the MLP's internal backpropagation
+            # We'll treat delta_mu_total as if it's the gradient at output
+            # and backpropagate through mu_head layers
+            delta_h_mu = self._backprop_through_mlp_to_input(
+                self.encoder.mu_head, h, delta_mu_total
+            )
+        else:
+            # Batch: handle each sample
+            delta_h_mu_list = []
+            for i in range(len(h)):
+                delta_h_mu_i = self._backprop_through_mlp_to_input(
+                    self.encoder.mu_head, h[i], delta_mu_total[i]
+                )
+                delta_h_mu_list.append(delta_h_mu_i)
+            delta_h_mu = np.array(delta_h_mu_list)
+        
+        # Backprop through log_var_head to get gradient w.r.t. h from log_var
+        if h.ndim == 1:
+            delta_h_log_var = self._backprop_through_mlp_to_input(
+                self.encoder.log_var_head, h, delta_log_var_total
+            )
+        else:
+            delta_h_log_var_list = []
+            for i in range(len(h)):
+                delta_h_log_var_i = self._backprop_through_mlp_to_input(
+                    self.encoder.log_var_head, h[i], delta_log_var_total[i]
+                )
+                delta_h_log_var_list.append(delta_h_log_var_i)
+            delta_h_log_var = np.array(delta_h_log_var_list)
+        
+        # Combine gradients from both heads
+        delta_h_total = delta_h_mu + delta_h_log_var
+        
+        # Update mu_head weights
+        if h.ndim == 1:
+            # For single sample, we need to update mu_head
+            # Use a simplified update: treat delta_mu_total as target gradient
+            self._update_mlp_with_gradient(self.encoder.mu_head, h, delta_mu_total)
+        else:
+            # Batch update for mu_head
+            for i in range(len(h)):
+                self._update_mlp_with_gradient(self.encoder.mu_head, h[i], delta_mu_total[i])
+        
+        # Update log_var_head weights
+        if h.ndim == 1:
+            self._update_mlp_with_gradient(self.encoder.log_var_head, h, delta_log_var_total)
+        else:
+            # Batch update for log_var_head
+            for i in range(len(h)):
+                self._update_mlp_with_gradient(self.encoder.log_var_head, h[i], delta_log_var_total[i])
+        
+        # Update base_mlp weights
+        if x.ndim == 1:
+            # For base_mlp, we need to backpropagate delta_h_total
+            # We'll use a dummy target approach
+            self._update_mlp_with_gradient(self.encoder.base_mlp, x, delta_h_total)
+        else:
+            # Batch update for base_mlp
+            for i in range(len(x)):
+                self._update_mlp_with_gradient(self.encoder.base_mlp, x[i], delta_h_total[i])
+    
+    def _backprop_through_mlp_to_input(self, mlp: MLP, x: np.ndarray, delta_out: np.ndarray) -> np.ndarray:
+        """
+        Backpropagate a gradient delta through MLP to get gradient at input.
+        
+        Args:
+            mlp: MLP to backpropagate through
+            x: Input to MLP
+            delta_out: Gradient at output layer
+            
+        Returns:
+            Gradient at input layer
+        """
+        # Forward pass to get activations and zs
+        zs, acts = mlp._forward_full(x)
+        
+        # Start with output gradient
+        deltas: List[np.ndarray] = [None] * len(mlp.layers)  # type: ignore
+        deltas[-1] = delta_out
+        
+        # Backpropagate through hidden layers
+        for l in reversed(range(len(mlp.layers)-1)):
+            deltas[l] = mlp.layers[l].backprop_delta(deltas[l+1], mlp.layers[l+1].weights)
+        
+        # Get gradient at input
+        if len(mlp.layers) > 0:
+            W0 = mlp.layers[0].weights[:, 1:]  # Remove bias column
+            delta_input = W0.T @ deltas[0]
+            return delta_input
+        return delta_out
+    
+    def _update_mlp_with_gradient(self, mlp: MLP, x: np.ndarray, delta_out: np.ndarray):
+        """
+        Update MLP weights using a gradient at the output layer.
+        
+        Args:
+            mlp: MLP to update
+            x: Input to MLP
+            delta_out: Gradient at output layer
+        """
+        # Forward pass to get activations
+        zs, acts = mlp._forward_full(x)
+        
+        # Compute deltas for all layers
+        deltas: List[np.ndarray] = [None] * len(mlp.layers)  # type: ignore
+        deltas[-1] = delta_out
+        
+        # Backpropagate through hidden layers
+        for l in reversed(range(len(mlp.layers)-1)):
+            deltas[l] = mlp.layers[l].backprop_delta(deltas[l+1], mlp.layers[l+1].weights)
+        
+        # Update weights
+        mlp.optimizer.begin_step()
+        for l, layer in enumerate(mlp.layers):
+            g = layer.grad_w(acts[l], deltas[l])
+            step = mlp.optimizer.update(l, g)
+            layer.weights -= step
     
     def _update_encoder(self, x: np.ndarray, mu: np.ndarray, log_var: np.ndarray, 
                        z: np.ndarray, x_recon: np.ndarray):
         """Update encoder using KL + reconstruction gradients."""
-        # Encoder update is more complex due to reparameterization
-        # KL gradients: dKL/dmu = mu, dKL/dlog_var = 0.5*(exp(log_var) - 1)
-        # Reconstruction gradient flows through z
-        # This requires proper backprop through reparameterization
-        
-        # Simplified: update encoder components separately
-        # Full implementation would compute gradients properly
-        pass  # Encoder update handled in fit method
+        # This method is kept for compatibility but will be replaced by _backprop_encoder
+        pass  # Encoder update handled in _train_step
     
     def _train_step(self, x_batch: np.ndarray):
         """
-        Single training step with proper gradient computation.
-        Uses the MLP's internal structure for backpropagation.
+        Single VAE training step with proper backpropagation.
         """
-        n_batch = len(x_batch)
-        
         # Forward pass
-        x_recon, mu, log_var, z = self.forward(x_batch)
+        mu, log_var = self.encoder.encode(x_batch)
+        epsilon = self.rng.normal(0, 1, size=mu.shape)  # Store for gradient computation
+        z = reparameterize(mu, log_var, epsilon=epsilon, rng=self.rng)
+        x_recon = self.decoder.decode(z)
         
-        # Compute losses
-        recon_loss = self.reconstruction_loss.value(x_recon, x_batch)
-        kl_loss = kl_divergence_loss(mu, log_var)
+        # 1. Backprop through decoder to get ∂L_recon/∂z
+        delta_z = self._backprop_decoder(x_batch, z, x_recon)
         
-        # Get reconstruction gradient at decoder output
-        # We need to backprop through decoder
-        # The decoder MLP expects (input, target) for its fit method
-        # We'll use a trick: treat z as "target" and do one-step update
+        # 2. Update decoder weights (standard backprop)
+        self._update_decoder(x_batch, z, x_recon)
         
-        # For decoder: gradient flows from reconstruction loss
-        # We manually compute what the decoder should receive as target
-        # Actually, we need to backprop through decoder properly
-        
-        # Simplified approach: train decoder with reconstruction target
-        # and encoder with combined gradient
-        
-        # Decoder update: standard reconstruction
-        # We'll update decoder weights using the reconstruction loss gradient
-        # This requires accessing decoder's internal backprop
-        
-        # For now, use a workaround: 
-        # 1. Train decoder separately on reconstruction
-        # 2. Train encoder on combined loss (recon + KL)
-        
-        # Decoder: treat as standard autoencoder decoder
-        # Compute gradient w.r.t. decoder input (z)
-        recon_delta_z = self.reconstruction_loss.delta_out(
-            x_recon, x_batch,
-            z,  # decoder input (before activation)
-            SIGMOID  # decoder output activation
+        # 3. Flow gradients through reparameterization
+        delta_mu_recon, delta_log_var_recon = self._reparameterization_gradients(
+            delta_z, mu, log_var, epsilon
         )
         
-        # Backprop through decoder to get gradient w.r.t. z
-        # This is complex - we'll use a simpler approach
+        # 4. Compute KL gradients (directly on encoder, no decoder)
+        delta_mu_kl, delta_log_var_kl = self._kl_gradients(mu, log_var)
         
-        # Encoder: needs gradient from both reconstruction (through z) and KL
-        # KL gradient w.r.t. mu and log_var:
-        kl_grad_mu = mu / n_batch  # dKL/dmu = mu (averaged)
-        kl_grad_log_var = 0.5 * (np.exp(log_var) - 1) / n_batch  # dKL/dlog_var
+        # 5. Combine gradients
+        delta_mu_total = delta_mu_recon + self.beta * delta_mu_kl
+        delta_log_var_total = delta_log_var_recon + self.beta * delta_log_var_kl
         
-        # Reconstruction gradient flows through reparameterization:
-        # dz/dmu = 1, dz/dlog_var = 0.5 * exp(0.5 * log_var) * epsilon
-        # But we need the gradient w.r.t. mu and log_var from decoder
-        
-        # For simplicity, we'll use an approximation:
-        # Update decoder on reconstruction loss
-        # Update encoder on KL loss (regularization)
-        # The reconstruction signal to encoder comes through the reparameterization
-        
-        # This is a simplified training - a full implementation would
-        # properly compute all gradients through the reparameterization trick
+        # 6. Backprop through encoder and update weights
+        self._backprop_encoder(x_batch, delta_mu_total, delta_log_var_total)
     
     def generate(self, n_samples: int = 10, seed: Optional[int] = None) -> np.ndarray:
         """
