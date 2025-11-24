@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Sequence, Optional, Tuple
+from typing import List, Sequence, Optional, Tuple, Any
 
 import numpy as np
 
@@ -180,12 +180,51 @@ class Autoencoder:
 
     def fit(self, X_in: np.ndarray, X_target: np.ndarray,
             epochs: int = 100, batch_size: int = 1,
-            shuffle: bool = True, verbose: bool = False) -> List[float]:
+            shuffle: bool = True, verbose: bool = False,
+            max_pixel_error: Optional[float] = None,
+            check_every: int = 1,
+            pixel_error_threshold: float = 0.5) -> List[float]:
         """
         Entrena el autoencoder con entrada X_in y objetivo X_target (útil para denoising).
+        
+        Args:
+            X_in: Datos de entrada (N, input_dim)
+            X_target: Datos objetivo (N, input_dim) - para autoencoder normal, X_target = X_in
+            epochs: Número máximo de épocas
+            batch_size: Tamaño del batch
+            shuffle: Si barajar los datos
+            verbose: Si imprimir progreso
+            max_pixel_error: Si se proporciona, detiene el entrenamiento cuando el error de píxeles
+                           máximo es <= max_pixel_error. None = no early stopping por error.
+            check_every: Cada cuántas épocas verificar el error de píxeles (default: 1 = cada época)
+            pixel_error_threshold: Threshold para binarización en pixel_error (0.0 para [-1,1], 0.5 para [0,1])
+        
+        Returns:
+            Historial de pérdidas
         """
-        history = self.mlp.fit(X_in, X_target, epochs=epochs, batch_size=batch_size,
-                               shuffle=shuffle, verbose=verbose)
+        # Función de validación que calcula el error máximo de píxeles
+        validation_fn = None
+        if max_pixel_error is not None:
+            def pixel_error_validation(X: np.ndarray, Y: np.ndarray, model: Any) -> float:
+                """Calcula el error máximo de píxeles para early stopping."""
+                # X es la entrada, Y es el target (para autoencoder normal, X == Y)
+                # pixel_error necesita la entrada X para reconstruir y comparar con Y
+                pixel_errors = self.pixel_error(X, threshold=pixel_error_threshold)
+                return float(np.max(pixel_errors))
+            
+            validation_fn = pixel_error_validation
+        
+        # Entrenar usando el MLP - toda la lógica de early stopping está en el MLP
+        history = self.mlp.fit(
+            X_in, X_target, 
+            epochs=epochs, 
+            batch_size=batch_size,
+            shuffle=shuffle, 
+            verbose=verbose,
+            validation_fn=validation_fn,
+            max_validation_error=max_pixel_error,
+            check_every=check_every
+        )
         self._sync_weights_from_mlp()
         return history
 

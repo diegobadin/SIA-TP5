@@ -1,7 +1,11 @@
 import json
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+
+# Agregar el directorio raíz del proyecto al path para poder importar módulos
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.autoencoder import Autoencoder
 from src.mlp.activations import SIGMOID, TANH
@@ -10,59 +14,20 @@ from src.mlp.optimizers import Adam
 from utils.graphs import plot_loss
 from utils.noise import add_noise
 from utils.parse_font import parse_font_h
-
-
-def _plot_grid(X, title, fname=None, shape=(7, 5), n_cols=8):
-    n = X.shape[0]
-    n_cols = min(n_cols, n)
-    n_rows = int(np.ceil(n / n_cols))
-    plt.figure(figsize=(n_cols * 1.2, n_rows * 1.4))
-    for i in range(n):
-        plt.subplot(n_rows, n_cols, i + 1)
-        plt.imshow(X[i].reshape(shape), cmap="gray_r")
-        plt.axis("off")
-    plt.suptitle(title)
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
-
-
-def _plot_latent(latent, labels, title, fname=None, highlight_point=None):
-    """Plot latent space with character labels, optionally highlighting a generated point."""
-    plt.figure(figsize=(8, 8))
-    plt.scatter(latent[:, 0], latent[:, 1], c="C0", alpha=0.6, s=100, label="Training data")
-    for i, (x, y) in enumerate(latent):
-        plt.text(x, y, str(labels[i]), fontsize=8, ha="center", va="center")
-    
-    if highlight_point is not None:
-        plt.scatter(highlight_point[0], highlight_point[1], c="red", s=200, 
-                   marker="*", label="Generated", edgecolors="black", linewidths=2)
-        plt.text(highlight_point[0], highlight_point[1], "GEN", fontsize=10, 
-                ha="center", va="center", color="white", weight="bold")
-    
-    plt.xlabel("z1")
-    plt.ylabel("z2")
-    plt.title(title)
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
+from utils.plot_autoencoder import plot_latent_space, plot_generation_results, plot_latent_space_with_generated, plot_grid
 
 
 def encode_training_data(ae, X, labels):
     """
-    Encode all training characters and store (label, Z_i) pairs.
+    Codifica todos los caracteres de entrenamiento y almacena pares (label, Z_i).
     
-    Args:
-        ae: Trained autoencoder
-        X: Training data (n_samples, n_features)
-        labels: Character labels (n_samples,)
+    Parámetros:
+        ae: Autoencoder entrenado
+        X: Datos de entrenamiento (n_samples, n_features)
+        labels: Etiquetas de caracteres (n_samples,)
         
-    Returns:
-        Dictionary mapping labels to latent vectors
+    Retorna:
+        Diccionario que mapea etiquetas a vectores latentes
     """
     latent_vectors = ae.get_latent_representation(X)
     return {int(label): z for label, z in zip(labels, latent_vectors)}
@@ -70,21 +35,22 @@ def encode_training_data(ae, X, labels):
 
 def interpolate_chars(ae, X, idx1, idx2, alpha=0.5):
     """
-    Interpolate between two characters in latent space.
+    Interpola entre dos caracteres en el espacio latente.
     
-    Args:
-        ae: Trained autoencoder
-        X: Training data (n_samples, n_features)
-        idx1: Index of first character
-        idx2: Index of second character
-        alpha: Interpolation factor (0.0 = char1, 1.0 = char2, 0.5 = midpoint)
+    Parámetros:
+        ae: Autoencoder entrenado
+        X: Datos de entrenamiento (n_samples, n_features)
+        idx1: Índice del primer carácter
+        idx2: Índice del segundo carácter
+        alpha: Factor de interpolación (0.0 = char2, 1.0 = char1, 0.5 = punto medio)
         
-    Returns:
-        Tuple (z_new, X_new) where z_new is the interpolated latent vector
-        and X_new is the decoded character
+    Retorna:
+        Tupla (z_new, X_new) donde z_new es el vector latente interpolado
+        y X_new es el carácter decodificado
     """
     z1 = ae.encode(X[idx1])
     z2 = ae.encode(X[idx2])
+    # Interpolación: alpha=0.0 -> char2, alpha=1.0 -> char1
     z_new = alpha * z1 + (1 - alpha) * z2
     X_new = ae.generate_from_latent(z_new)
     return z_new, X_new
@@ -92,30 +58,30 @@ def interpolate_chars(ae, X, idx1, idx2, alpha=0.5):
 
 def compare_with_training(X_new, X_train, labels, threshold=0.0):
     """
-    Compute Hamming distance between generated character and all training samples.
+    Calcula la distancia de Hamming entre el carácter generado y todos los ejemplos de entrenamiento.
     
-    Args:
-        X_new: Generated character (n_features,)
-        X_train: Training data (n_samples, n_features)
-        labels: Training labels (n_samples,)
-        threshold: Threshold for binarization
+    Parámetros:
+        X_new: Carácter generado (n_features,)
+        X_train: Datos de entrenamiento (n_samples, n_features)
+        labels: Etiquetas de entrenamiento (n_samples,)
+        threshold: Umbral para binarización
         
-    Returns:
-        Dictionary with distances and nearest neighbor info
+    Retorna:
+        Diccionario con distancias e información del vecino más cercano
     """
-    # Binarize
+    # Binarizar
     X_new_bin = (X_new > threshold).astype(int)
     X_train_bin = (X_train > threshold).astype(int)
     
-    # Compute Hamming distances
+    # Calcular distancias de Hamming
     distances = np.sum(X_new_bin != X_train_bin, axis=1)
     
-    # Find nearest neighbor
+    # Encontrar vecino más cercano
     nearest_idx = np.argmin(distances)
     nearest_distance = distances[nearest_idx]
     nearest_label = int(labels[nearest_idx])
     
-    # Create distance dictionary
+    # Crear diccionario de distancias
     distances_dict = {int(label): int(dist) for label, dist in zip(labels, distances)}
     
     return {
@@ -131,111 +97,67 @@ def compare_with_training(X_new, X_train, labels, threshold=0.0):
     }
 
 
-def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, char_idx2, 
-                           X_train, title, fname=None, shape=(7, 5)):
-    """
-    Plot generated character and nearest neighbor comparison.
-    
-    Args:
-        generated_char: Generated character (n_features,)
-        nearest_neighbor_char: Nearest neighbor from training (n_features,)
-        char_idx1: Index of first character used in interpolation
-        char_idx2: Index of second character used in interpolation
-        X_train: Training data
-        title: Plot title
-        fname: Output filename
-        shape: Shape to reshape characters for display
-    """
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-    
-    # Original character 1
-    axes[0].imshow(X_train[char_idx1].reshape(shape), cmap="gray_r")
-    axes[0].set_title(f"Char {char_idx1}\n(original)")
-    axes[0].axis("off")
-    
-    # Generated character
-    axes[1].imshow(generated_char.reshape(shape), cmap="gray_r")
-    axes[1].set_title(f"Generated\n(interp: {char_idx1}→{char_idx2})")
-    axes[1].axis("off")
-    
-    # Original character 2
-    axes[2].imshow(X_train[char_idx2].reshape(shape), cmap="gray_r")
-    axes[2].set_title(f"Char {char_idx2}\n(original)")
-    axes[2].axis("off")
-    
-    # Nearest neighbor
-    axes[3].imshow(nearest_neighbor_char.reshape(shape), cmap="gray_r")
-    axes[3].set_title("Nearest Neighbor\n(from training)")
-    axes[3].axis("off")
-    
-    plt.suptitle(title)
-    plt.tight_layout()
-    if fname:
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/{fname}", dpi=140)
 
 
 def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5, 
-                          scale="-11", output_prefix="generation"):
+                          scale="01", output_prefix="generation"):
     """
-    Orchestrate the complete generation workflow.
+    Orquesta el flujo completo de generación.
     
-    Args:
-        ae: Trained autoencoder
-        X: Training data
-        labels: Character labels
-        char_idx1: Index of first character
-        char_idx2: Index of second character
-        alpha: Interpolation factor
-        scale: Data scale ("-11" or "01")
-        output_prefix: Prefix for output files
+    Parámetros:
+        ae: Autoencoder entrenado
+        X: Datos de entrenamiento
+        labels: Etiquetas de caracteres
+        char_idx1: Índice del primer carácter
+        char_idx2: Índice del segundo carácter
+        alpha: Factor de interpolación
+        scale: Escala de datos ("-11" o "01")
+        output_prefix: Prefijo para archivos de salida
         
-    Returns:
-        Dictionary with generation results
+    Retorna:
+        Diccionario con resultados de generación
     """
     os.makedirs("outputs", exist_ok=True)
     
-    # Step 1: Encode all training characters
+    # Paso 1: Codificar todos los caracteres de entrenamiento
     latent_dict = encode_training_data(ae, X, labels)
     all_latent = np.array([latent_dict[label] for label in sorted(latent_dict.keys())])
     
-    # Step 2: Plot latent space
-    _plot_latent(all_latent, sorted(latent_dict.keys()), 
-                "Latent Space - Training Data", 
-                f"{output_prefix}_latent_space.png")
-    
-    # Step 3: Interpolate between two characters
+    # Paso 2: Interpolar entre dos caracteres
     z_new, X_new = interpolate_chars(ae, X, char_idx1, char_idx2, alpha)
     
-    # Step 4: Decode and save generated character
-    plt.figure(figsize=(3, 4))
-    plt.imshow(X_new.reshape(7, 5), cmap="gray_r")
-    plt.title(f"Generated Character\n(α={alpha}, {char_idx1}→{char_idx2})")
-    plt.axis("off")
-    plt.tight_layout()
-    plt.savefig(f"outputs/{output_prefix}_generated_char.png", dpi=140)
-    plt.close()
-    
-    # Step 5: Compare with training set
+    # Paso 3: Comparar con el conjunto de entrenamiento
     threshold = 0.0 if scale == "-11" else 0.5
     comparison = compare_with_training(X_new, X, labels, threshold)
     
-    # Get nearest neighbor character
+    # Obtener el carácter vecino más cercano
     nearest_idx = comparison["nearest_neighbor"]["index"]
     nearest_char = X[nearest_idx]
     
-    # Step 6: Display results
+    # Paso 4: Crear diccionario de mapeo de caracteres
+    char_map = {
+        0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+        8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+        16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+        24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+    }
+    
+    # Paso 5: Graficar comparación (muestra el resultado visual)
     plot_generation_results(X_new, nearest_char, char_idx1, char_idx2, X,
-                           f"Generation Results (α={alpha})",
-                           f"{output_prefix}_comparison.png")
+                           f"Resultados de Generación (α={alpha})",
+                           f"outputs/{output_prefix}_comparison.png")
     
-    # Plot latent space with generated point highlighted
-    _plot_latent(all_latent, sorted(latent_dict.keys()),
-                f"Latent Space with Generated Point\n(α={alpha}, {char_idx1}→{char_idx2})",
-                f"{output_prefix}_latent_with_generated.png",
-                highlight_point=z_new)
+    # Paso 6: Graficar espacio latente con punto generado resaltado (muestra dónde está en el espacio)
+    plot_latent_space_with_generated(
+        all_latent,
+        np.array(sorted(latent_dict.keys())),
+        z_new,
+        f"Espacio Latente con Punto Generado (α={alpha}, {char_idx1}→{char_idx2})",
+        f"outputs/{output_prefix}_latent_with_generated.png",
+        char_map=char_map
+    )
     
-    # Save generation report
+    # Guardar reporte de generación
     report = {
         "interpolation": {
             "char_idx1": int(char_idx1),
@@ -249,58 +171,73 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     with open(f"outputs/{output_prefix}_generation_report.json", "w") as f:
         json.dump(report, f, indent=2)
     
-    # Print summary
-    print(f"\n=== Generation Results ({output_prefix}) ===")
-    print(f"Interpolated between characters {char_idx1} and {char_idx2} (α={alpha})")
-    print(f"Nearest neighbor: character {comparison['nearest_neighbor']['label']} "
-          f"(distance: {comparison['nearest_neighbor']['distance']} pixels)")
-    print(f"Min distance: {comparison['min_distance']}, "
-          f"Max distance: {comparison['max_distance']}, "
-          f"Mean distance: {comparison['mean_distance']:.2f}")
-    print(f"Results saved to outputs/{output_prefix}_*.png and *.json")
+    # Imprimir resumen
+    print(f"\n=== Resultados de Generación ({output_prefix}) ===")
+    print(f"Interpolado entre caracteres {char_idx1} y {char_idx2} (α={alpha})")
+    print(f"Vecino más cercano: carácter {comparison['nearest_neighbor']['label']} "
+          f"(distancia: {comparison['nearest_neighbor']['distance']} píxeles)")
+    print(f"Distancia mínima: {comparison['min_distance']}, "
+          f"Distancia máxima: {comparison['max_distance']}, "
+          f"Distancia media: {comparison['mean_distance']:.2f}")
+    print(f"Resultados guardados en outputs/{output_prefix}_*.png y *.json")
     
     return report
 
 
-def run(latent_dim=2, epochs=200, noise_level=0.0, deep=False,
-        batch_size=4, lr=0.01, scale="-11"):
+def run(latent_dim=2, noise_level=0.0):
     """
-    Entrena un autoencoder sobre los caracteres 7x5 de font.h.
+    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Inicializacion_Grande.
+    
+    Configuración fija: Inicializacion_Grande
+    - Arquitectura: 35 → [20, 10] → 2 → [10, 20] → 35
+    - Activaciones: TANH en encoder y capas ocultas, SIGMOID en salida
+    - Optimizador: Adam(lr=0.001)
+    - Batch size: 1
+    - W init scale: 0.2
+    - Scale: "01" (datos en [0, 1])
+    - Early stopping: max_pixel_error=1.0
 
-    Parámetros frecuentes:
-      latent_dim : tamaño del espacio latente
+    Parámetros:
+      latent_dim : tamaño del espacio latente (default: 2)
       noise_level: >0 para denoising (agrega ruido gaussiano a la entrada)
-      deep       : agrega una capa oculta adicional 16-neuronas a cada lado
-      scale      : '01' usa salida sigmoide, '-11' usa salida tanh
     """
+    # Configuración Inicializacion_Grande
+    scale = "01" 
+    encoder_hidden = [20, 10]
+    decoder_hidden = [10, 20]
+    encoder_activations = [TANH, TANH, TANH]
+    decoder_activations = [TANH, TANH, SIGMOID]
+    lr = 0.001
+    batch_size = 1
+    w_init_scale = 0.2
+    max_epochs = 10000
+    max_pixel_error = 1.0
+    
     X, labels = parse_font_h(scale=scale)
     X_in = add_noise(X, noise_level=noise_level, seed=42) if noise_level > 0 else X
-
-    hidden = [16] if deep else []
-    out_act = SIGMOID if scale == "01" else TANH
-
-    encoder_acts = [TANH] * (len(hidden) + 1)
-    decoder_acts = ([TANH] * len(hidden)) + [out_act]
 
     autoencoder = Autoencoder(
         input_dim=X.shape[1],
         latent_dim=latent_dim,
-        encoder_hidden=hidden,
-        decoder_hidden=list(reversed(hidden)),
-        encoder_activations=encoder_acts,
-        decoder_activations=decoder_acts,
+        encoder_hidden=encoder_hidden,
+        decoder_hidden=decoder_hidden,
+        encoder_activations=encoder_activations,
+        decoder_activations=decoder_activations,
         loss=MSELoss(),
         optimizer=Adam(lr=lr),
-        w_init_scale=0.1,
+        w_init_scale=w_init_scale,
         seed=42,
     )
 
     losses = autoencoder.fit(
         X_in, X,
-        epochs=epochs,
+        epochs=max_epochs,
         batch_size=batch_size,
         shuffle=True,
-        verbose=True
+        verbose=False,
+        max_pixel_error=max_pixel_error,
+        check_every=1,
+        pixel_error_threshold=0.5 if scale == "01" else 0.0
     )
 
     # Reconstrucciones
@@ -308,37 +245,130 @@ def run(latent_dim=2, epochs=200, noise_level=0.0, deep=False,
 
     # Graficos básicos
     plot_loss(losses, loss_name="MSE", title="Autoencoder - Loss", fname="autoencoder_loss.png")
-    _plot_grid(X, "Originales", fname="autoencoder_originals.png")
-    _plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png")
+    plot_grid(X, "Originales", fname="autoencoder_originals.png")
+    plot_grid(recon, "Reconstruidos", fname="autoencoder_recon.png")
 
     # Reporte rápido
     final_loss = losses[-1] if losses else None
-    print(f"[Autoencoder] latent={latent_dim} deep={deep} noise={noise_level} scale={scale}")
+    print(f"[Autoencoder] latent={latent_dim} noise={noise_level} scale={scale}")
     print(f"Loss final: {final_loss:.6f}" if final_loss is not None else "Sin pérdidas registradas.")
     
-    # Requirement 3: Plot latent space (2D visualization)
+    # Requisito 3: Graficar espacio latente (visualización 2D)
     if latent_dim == 2:
         latent = autoencoder.get_latent_representation(X)
-        _plot_latent(latent, labels, "Latent Space - All Training Characters", 
-                    "latent_space.png")
-        print("\n[Requirement 3] Latent space plot saved to outputs/latent_space.png")
+        char_map = {
+            0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+            8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+            16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+            24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+        }
+        plot_latent_space(
+            {"Todos los Caracteres de Entrenamiento": latent},
+            labels,
+            save_path="outputs/latent_space.png",
+            char_map=char_map,
+            individual=True
+        )
+        print("\n[Requisito 3] Gráfico del espacio latente guardado en outputs/latent_space.png")
     
-    # Requirement 4: Generate new letters not in training set
-    if latent_dim == 2:  # Only generate if using 2D latent space
-        print("\n=== Generating New Characters (Requirement 4) ===")
+    # Requisito 4: Generar nuevas letras que no pertenecen al conjunto de entrenamiento
+    if latent_dim == 2: 
+        print("\n" + "="*80)
+        print("REQUIREMENT 4: Generar nuevas letras que no pertenecen al conjunto de entrenamiento")
+        print("="*80)
+        print("\nLa generación se realiza interpolando en el espacio latente entre dos caracteres")
+        print("del conjunto de entrenamiento. Esto crea nuevos caracteres que no están en el dataset.")
+        print("="*80)
         
-        # Generate for several character pairs
+        # Mapeo de índices a caracteres para mejor visualización
+        char_map = {
+            0: '`', 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g',
+            8: 'h', 9: 'i', 10: 'j', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o',
+            16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
+            24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
+        }
+        
+        # Pares seleccionados basados en análisis del espacio latente de Inicializacion_Grande:
         char_pairs = [
-            (1, 2),   # 'a' → 'b'
-            (15, 4),  # 'o' → 'd'
-            (2, 3),   # 'b' → 'c'
+            (5, 15),  # 'e' → 'o' 
+            (15, 13), # 'o' → 'm' 
+            (1, 17),  # 'a' → 'q' 
+            (15, 11), # 'o' → 'k' 
         ]
+        
+        # Obtener representaciones latentes para calcular distancias
+        print("\nCalculando distancias en el espacio latente...")
+        latent = autoencoder.get_latent_representation(X)
+        
+        # Calcular y mostrar distancias entre cada par
+        print("\n" + "="*80)
+        print("DISTANCIAS ENTRE PARES DE CARACTERES EN EL ESPACIO LATENTE")
+        print("="*80)
+        for idx, (idx1, idx2) in enumerate(char_pairs):
+            if idx1 < len(X) and idx2 < len(X):
+                char1 = char_map.get(int(labels[idx1]), str(int(labels[idx1])))
+                char2 = char_map.get(int(labels[idx2]), str(int(labels[idx2])))
+                
+                # Calcular distancia euclidiana
+                z1 = latent[idx1]
+                z2 = latent[idx2]
+                distance = np.linalg.norm(z1 - z2)
+                
+                print(f"\nPar {idx+1}: '{char1}' (idx {idx1}) ↔ '{char2}' (idx {idx2})")
+                print(f"  Coordenadas '{char1}': z = [{z1[0]:.4f}, {z1[1]:.4f}]")
+                print(f"  Coordenadas '{char2}': z = [{z2[0]:.4f}, {z2[1]:.4f}]")
+                print(f"  Distancia euclidiana: {distance:.4f}")
+        
+        print("\n" + "="*80)
+        print("INICIANDO GENERACIÓN DE CARACTERES")
+        print("="*80)
+        
+        # Diferentes valores de alpha para mostrar diferentes puntos de interpolación
+        alphas = [0.3, 0.5, 0.7]
         
         for i, (idx1, idx2) in enumerate(char_pairs):
             if idx1 < len(X) and idx2 < len(X):
-                demonstrate_generation(
-                    autoencoder, X, labels, idx1, idx2, alpha=0.5,
-                    scale=scale, output_prefix=f"gen_{i+1}_char{idx1}_to_char{idx2}"
-                )
+                char1 = char_map.get(int(labels[idx1]), str(int(labels[idx1])))
+                char2 = char_map.get(int(labels[idx2]), str(int(labels[idx2])))
+                print(f"\n--- Generando entre '{char1}' (índice {idx1}) y '{char2}' (índice {idx2}) ---")
+                
+                # Generar con diferentes valores de alpha
+                for alpha in alphas:
+                    demonstrate_generation(
+                        autoencoder, X, labels, idx1, idx2, alpha=alpha,
+                        scale=scale, output_prefix=f"gen_{i+1}_{char1}_to_{char2}_alpha{alpha}"
+                    )
+        
+        print("\n" + "="*80)
+        print("✓ Generación completada. Revisa los archivos en outputs/ para ver los resultados.")
+        print("="*80)
     
-    plt.show()
+    return autoencoder, X, labels, losses
+
+
+if __name__ == "__main__":
+    """
+    Ejecuta el ejercicio 1 con la configuración Inicializacion_Grande (fija).
+    Esta configuración usa scale="01" (datos en [0, 1]) con SIGMOID en la salida.
+    """
+    print("\n" + "="*80)
+    print("EJERCICIO 1: Autoencoder para caracteres 7x5")
+    print("Configuración: Inicializacion_Grande (fija)")
+    print("="*80 + "\n")
+    
+    # Ejecutar con la configuración Inicializacion_Grande (siempre se usa esta configuración)
+    autoencoder, X, labels, losses = run(
+        latent_dim=2
+    )
+    
+    print("\n" + "="*80)
+    print("EJERCICIO COMPLETADO")
+    print("="*80)
+    print("\nArchivos generados en outputs/:")
+    print("  - autoencoder_loss.png: Curva de pérdida durante el entrenamiento")
+    print("  - autoencoder_originals.png: Caracteres originales")
+    print("  - autoencoder_recon.png: Caracteres reconstruidos")
+    print("  - latent_space.png: Visualización del espacio latente 2D")
+    print("  - gen_*_*.png: Caracteres generados por interpolación")
+    print("  - gen_*_generation_report.json: Reportes de generación")
+    print("="*80)
