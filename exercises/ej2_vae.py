@@ -137,11 +137,13 @@ def plot_generated_samples(vae, X_train, n_generated=16, img_shape=(16, 16), fna
 def train_vae_simple(X, latent_dim=2, epochs=200, beta=1.0, 
                     batch_size=4, lr=0.001, seed=42):
     """
-    Simplified VAE training that works with existing framework.
+    VAE training with proper backpropagation.
     
-    This uses a simplified training approach where we:
-    1. Train decoder on reconstruction
-    2. Train encoder with KL regularization
+    This uses proper VAE training where:
+    1. Reconstruction loss flows backward through decoder → ∂L_recon/∂z
+    2. Gradients flow through reparameterization → ∂L_recon/∂μ, ∂L_recon/∂log_var
+    3. KL loss directly affects encoder → ∂L_KL/∂μ, ∂L_KL/∂log_var
+    4. Combined gradients backprop through encoder
     """
     input_dim = X.shape[1]
     
@@ -159,61 +161,8 @@ def train_vae_simple(X, latent_dim=2, epochs=200, beta=1.0,
         seed=seed
     )
     
-    # Simplified training: alternate between decoder and encoder updates
-    n_samples = len(X)
-    indices = np.arange(n_samples)
-    rng = np.random.default_rng(seed)
-    
-    for epoch in range(epochs):
-        rng.shuffle(indices)
-        
-        epoch_recon = []
-        epoch_kl = []
-        epoch_total = []
-        
-        for i in range(0, n_samples, batch_size):
-            batch_idx = indices[i:i+batch_size]
-            x_batch = X[batch_idx]
-            
-            # Forward
-            mu, log_var = vae.encoder.encode(x_batch)
-            z = reparameterize(mu, log_var, rng=rng)
-            x_recon = vae.decoder.decode(z)
-            
-            # Losses
-            recon_loss = MSELoss().value(x_recon, x_batch)
-            kl_loss = kl_divergence_loss(mu, log_var)
-            total_loss = recon_loss + beta * kl_loss
-            
-            epoch_recon.append(recon_loss)
-            epoch_kl.append(kl_loss)
-            epoch_total.append(total_loss)
-            
-            # Update decoder: train on (z, x) pairs for reconstruction
-            # Use decoder's MLP fit method (simplified but works)
-            # Train decoder for 1 epoch on this batch
-            vae.decoder.mlp.fit(z, x_batch, epochs=1, batch_size=len(x_batch), 
-                               shuffle=False, verbose=False)
-            
-            # Encoder update: simplified approach
-            # In a full VAE, we'd properly backprop through reparameterization
-            # For now, we'll update encoder components using gradient approximations
-            # This is a simplified training - a full implementation would compute
-            # proper gradients through the reparameterization trick
-            
-            # Note: The encoder will learn through the reconstruction signal
-            # that flows back through z, even if not perfectly optimized
-            # The KL term provides regularization
-        
-        vae.history["reconstruction_loss"].append(np.mean(epoch_recon))
-        vae.history["kl_loss"].append(np.mean(epoch_kl))
-        vae.history["total_loss"].append(np.mean(epoch_total))
-        
-        if (epoch + 1) % 20 == 0:
-            print(f"Epoch {epoch+1}/{epochs} - "
-                  f"Recon: {np.mean(epoch_recon):.6f}, "
-                  f"KL: {np.mean(epoch_kl):.6f}, "
-                  f"Total: {np.mean(epoch_total):.6f}")
+    # Train using proper VAE backpropagation
+    vae.fit(X, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=True)
     
     return vae
 
