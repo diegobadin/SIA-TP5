@@ -146,8 +146,7 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     plot_generation_results(
         X_new, nearest_char, char_idx1, char_idx2, X,
         f"Resultados de Generación (α={alpha})",
-        f"outputs/{output_prefix}_comparison.png",
-        threshold=threshold
+        f"outputs/{output_prefix}_comparison.png"
     )
     
     # Paso 6: Graficar espacio latente con punto generado resaltado (muestra dónde está en el espacio)
@@ -189,14 +188,14 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
 
 def run(latent_dim=2, noise_level=0.0):
     """
-    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Inicializacion_Grande.
+    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Arquitectura_Ancha_Rapida.
     
-    Configuración fija: Inicializacion_Grande
-    - Arquitectura: 35 → [20, 10] → 2 → [10, 20] → 35
+    Configuración fija: Arquitectura_Ancha_Rapida
+    - Arquitectura: 35 → [30, 15] → 2 → [15, 30] → 35
     - Activaciones: TANH en encoder y capas ocultas, SIGMOID en salida
     - Optimizador: Adam(lr=0.001)
     - Batch size: 1
-    - W init scale: 0.2
+    - W init scale: 0.1
     - Scale: "01" (datos en [0, 1])
     - Early stopping: max_pixel_error=1.0
 
@@ -204,15 +203,15 @@ def run(latent_dim=2, noise_level=0.0):
       latent_dim : tamaño del espacio latente (default: 2)
       noise_level: >0 para denoising (agrega ruido gaussiano a la entrada)
     """
-    # Configuración Inicializacion_Grande
+    # Configuración Arquitectura_Ancha_Rapida
     scale = "01" 
-    encoder_hidden = [20, 10]
-    decoder_hidden = [10, 20]
+    encoder_hidden = [30, 15]
+    decoder_hidden = [15, 30]
     encoder_activations = [TANH, TANH, TANH]
     decoder_activations = [TANH, TANH, SIGMOID]
     lr = 0.001
     batch_size = 1
-    w_init_scale = 0.2
+    w_init_scale = 0.1
     max_epochs = 10000
     max_pixel_error = 1.0
     
@@ -292,12 +291,39 @@ def run(latent_dim=2, noise_level=0.0):
             24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
         }
         
-        # Pares seleccionados basados en análisis del espacio latente de Inicializacion_Grande:
+        # Pares seleccionados basados en análisis del espacio latente de Arquitectura_Ancha_Rapida:
+        # Estos pares fueron elegidos para demostrar diferentes aspectos de la generación:
+        # Basados en la visualización del espacio latente donde se observa:
+        # - Concentración de caracteres en la parte superior (z2 alto)
+        # - Caracteres en la esquina inferior derecha (z1 alto, z2 bajo)
+        # - Caracteres en la esquina inferior izquierda (z1 bajo, z2 bajo)
         char_pairs = [
-            (5, 15),  # 'e' → 'o' 
-            (15, 13), # 'o' → 'm' 
-            (1, 17),  # 'a' → 'q' 
-            (15, 11), # 'o' → 'k' 
+            (16, 11),  # 'p' → 'k' - Transición suave entre letras similares (distancia ~0.15)
+                      # Justificación: Ambos caracteres están en la parte superior del espacio latente,
+                      # muy cercanos entre sí. Esta proximidad permite ver cómo el autoencoder genera
+                      # variaciones sutiles entre caracteres vecinos, mostrando transiciones suaves
+                      # y naturales en el espacio latente.
+            
+            (15, 13),  # 'o' → 'm' - Ambas con curvas (distancia ~0.53)
+                      # Justificación: Ambas letras comparten características visuales (curvas redondas)
+                      # pero están en diferentes regiones del espacio latente. La interpolación explora
+                      # cómo se transforman estas características visuales mientras se mueve entre
+                      # regiones, manteniendo cierta coherencia estructural.
+            
+            (1, 4),    # 'a' → 'd' - Esquinas opuestas (distancia ~1.06)
+                      # Justificación: Caracteres diferentes ubicados en esquinas opuestas del espacio
+                      # latente. 'a' está en la esquina inferior derecha y 'd' en la esquina inferior
+                      # izquierda. Esta distancia permite explorar cómo el modelo generaliza entre
+                      # regiones distantes, generando caracteres nuevos que no están en el conjunto
+                      # de entrenamiento, manteniendo una transición visualmente coherente.
+            
+            (5, 21),   # 'e' → 'u' - Cruce vertical (distancia ~1.00)
+                      # Justificación: Ambas letras tienen curvas pero están en regiones opuestas
+                      # verticalmente del espacio latente. 'e' está en la parte superior-derecha
+                      # y 'u' en la parte inferior-derecha. La interpolación cruza verticalmente
+                      # el espacio, mostrando cómo el modelo transforma caracteres con características
+                      # visuales similares (curvas) mientras se mueve entre regiones diferentes,
+                      # generando transiciones interesantes y coherentes.
         ]
         
         # Obtener representaciones latentes para calcular distancias
@@ -352,15 +378,15 @@ def run(latent_dim=2, noise_level=0.0):
 
 if __name__ == "__main__":
     """
-    Ejecuta el ejercicio 1 con la configuración Inicializacion_Grande (fija).
+    Ejecuta el ejercicio 1 con la configuración Arquitectura_Ancha_Rapida (fija).
     Esta configuración usa scale="01" (datos en [0, 1]) con SIGMOID en la salida.
     """
     print("\n" + "="*80)
     print("EJERCICIO 1: Autoencoder para caracteres 7x5")
-    print("Configuración: Inicializacion_Grande (fija)")
+    print("Configuración: Arquitectura_Ancha_Rapida (fija)")
     print("="*80 + "\n")
     
-    # Ejecutar con la configuración Inicializacion_Grande (siempre se usa esta configuración)
+    # Ejecutar con la configuración Arquitectura_Ancha_Rapida (siempre se usa esta configuración)
     autoencoder, X, labels, losses = run(
         latent_dim=2
     )

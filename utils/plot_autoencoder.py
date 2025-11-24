@@ -518,8 +518,7 @@ def plot_pixel_error_comparison_table(autoencoders: Dict[str, Any], X: np.ndarra
 
 
 def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, char_idx2, 
-                           X_train, title, fname=None, shape=(7, 5),
-                           threshold: Optional[float] = None):
+                           X_train, title, fname=None, shape=(7, 5)):
     """
     Plot generated character and nearest neighbor comparison.
     
@@ -533,9 +532,9 @@ def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, ch
         fname: Output filename (optional)
         shape: Shape to reshape characters for display
     """
-    gen_plot = _apply_threshold(generated_char, threshold)
-    nn_plot = _apply_threshold(nearest_neighbor_char, threshold)
-    X_plot = _apply_threshold(X_train, threshold)
+    gen_plot = generated_char
+    nn_plot = nearest_neighbor_char
+    X_plot = X_train
     fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     
     # Original character 1
