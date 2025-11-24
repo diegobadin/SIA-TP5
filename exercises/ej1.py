@@ -307,11 +307,12 @@ def run(latent_dim=2, noise_level=0.0):
                       # cómo se transforman estas características visuales mientras se mueve entre
                       # regiones, manteniendo cierta coherencia estructural.
             
-            (1, 31),   # 'a' → 'DEL' - Esquinas opuestas (distancia ~1.9)
-                      # Justificación: Caracteres extremadamente diferentes ubicados en esquinas opuestas
-                      # del espacio latente. Esta gran distancia permite explorar los límites del espacio
-                      # y muestra cómo el modelo generaliza entre regiones muy distantes, generando
-                      # caracteres completamente nuevos que no están en el conjunto de entrenamiento.
+            (1, 4),    # 'a' → 'd' - Esquinas opuestas (distancia ~1.06)
+                      # Justificación: Caracteres diferentes ubicados en esquinas opuestas del espacio
+                      # latente. 'a' está en la esquina inferior derecha y 'd' en la esquina inferior
+                      # izquierda. Esta distancia permite explorar cómo el modelo generaliza entre
+                      # regiones distantes, generando caracteres nuevos que no están en el conjunto
+                      # de entrenamiento, manteniendo una transición visualmente coherente.
             
             (5, 21),   # 'e' → 'u' - Cruce vertical (distancia ~1.00)
                       # Justificación: Ambas letras tienen curvas pero están en regiones opuestas
