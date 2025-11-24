@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,6 +11,13 @@ from src.mlp.optimizers import Adam
 from utils.graphs import plot_loss
 from utils.noise import add_noise
 from utils.parse_font import parse_font_h
+
+
+def _binarize(X: np.ndarray, threshold: Optional[float]):
+    """Devuelve X binarizado usando el threshold indicado."""
+    if threshold is None:
+        return X
+    return np.where(X > threshold, 1.0, 0.0)
 
 
 def evaluate_denoising(ae, X_clean, X_noisy, threshold=0.0):
@@ -54,7 +62,8 @@ def evaluate_denoising(ae, X_clean, X_noisy, threshold=0.0):
 
 
 def plot_denoising_comparison(X_original, X_noisy, X_denoised, noise_level, 
-                              fname=None, shape=(7, 5), n_samples=8):
+                              fname=None, shape=(7, 5), n_samples=8,
+                              threshold: Optional[float] = None):
     """
     Plot side-by-side comparison: Original | Noisy | Denoised.
     
@@ -73,21 +82,25 @@ def plot_denoising_comparison(X_original, X_noisy, X_denoised, noise_level,
     if n_samples == 1:
         axes = axes.reshape(1, -1)
     
+    X_orig_plot = _binarize(X_original, threshold)
+    X_noisy_plot = X_noisy  # mantener escala de grises para visualizar el ruido
+    X_denoised_plot = _binarize(X_denoised, threshold)
+
     for i in range(n_samples):
         # Original
-        axes[i, 0].imshow(X_original[i].reshape(shape), cmap="gray_r")
+        axes[i, 0].imshow(X_orig_plot[i].reshape(shape), cmap="gray_r")
         if i == 0:
             axes[i, 0].set_title("Original")
         axes[i, 0].axis("off")
         
         # Noisy
-        axes[i, 1].imshow(X_noisy[i].reshape(shape), cmap="gray_r")
+        axes[i, 1].imshow(X_noisy_plot[i].reshape(shape), cmap="gray_r")
         if i == 0:
             axes[i, 1].set_title(f"Noisy (σ={noise_level:.2f})")
         axes[i, 1].axis("off")
         
         # Denoised
-        axes[i, 2].imshow(X_denoised[i].reshape(shape), cmap="gray_r")
+        axes[i, 2].imshow(X_denoised_plot[i].reshape(shape), cmap="gray_r")
         if i == 0:
             axes[i, 2].set_title("Denoised")
         axes[i, 2].axis("off")
@@ -143,7 +156,8 @@ def plot_denoising_performance(metrics_dict, fname=None):
 
 
 def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict, 
-                         char_indices=None, fname=None, shape=(7, 5)):
+                         char_indices=None, fname=None, shape=(7, 5),
+                         threshold: Optional[float] = None):
     """
     Plot grid showing same characters at different noise levels.
     
@@ -169,21 +183,25 @@ def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict,
     if n_chars == 1:
         axes = axes.reshape(-1, 1)
     
+    X_original_plot = _binarize(X_original, threshold)
+
     for i, noise_level in enumerate(sorted(noise_levels)):
         X_denoised = X_denoised_dict[noise_level]
         X_noisy = add_noise(X_original, noise_level=noise_level, seed=42)
+        X_noisy_plot = X_noisy  # mostrar el ruido con sus intensidades reales
+        X_denoised_plot = _binarize(X_denoised, threshold)
         
         for j, char_idx in enumerate(char_indices):
             col_base = j * 3
             
             # Original
-            axes[i, col_base].imshow(X_original[char_idx].reshape(shape), cmap="gray_r")
+            axes[i, col_base].imshow(X_original_plot[char_idx].reshape(shape), cmap="gray_r")
             if i == 0:
                 axes[i, col_base].set_title(f"Char {char_idx}\nOriginal")
             axes[i, col_base].axis("off")
             
             # Noisy
-            axes[i, col_base + 1].imshow(X_noisy[char_idx].reshape(shape), cmap="gray_r")
+            axes[i, col_base + 1].imshow(X_noisy_plot[char_idx].reshape(shape), cmap="gray_r")
             if i == 0:
                 axes[i, col_base + 1].set_title("Noisy")
             axes[i, col_base + 1].axis("off")
@@ -191,7 +209,7 @@ def plot_noise_level_grid(X_original, noise_levels, X_denoised_dict,
                 axes[i, col_base + 1].set_ylabel(f"σ={noise_level:.2f}", fontsize=10)
             
             # Denoised
-            axes[i, col_base + 2].imshow(X_denoised[char_idx].reshape(shape), cmap="gray_r")
+            axes[i, col_base + 2].imshow(X_denoised_plot[char_idx].reshape(shape), cmap="gray_r")
             if i == 0:
                 axes[i, col_base + 2].set_title("Denoised")
             axes[i, col_base + 2].axis("off")
@@ -297,7 +315,8 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
         # Plot comparison for this noise level
         plot_denoising_comparison(
             X, X_noisy, X_denoised_dict[noise_level], noise_level,
-            fname=f"denoising_comparison_noise_{noise_level:.2f}.png"
+            fname=f"denoising_comparison_noise_{noise_level:.2f}.png",
+            threshold=threshold
         )
         
         # Plot training loss
@@ -316,7 +335,8 @@ def study_denoising_autoencoder(noise_levels=None, latent_dim=2, epochs=300,
     print("\n--- Generating summary visualizations ---")
     plot_denoising_performance(results, "denoising_performance_curves.png")
     plot_noise_level_grid(X, noise_levels, X_denoised_dict, 
-                         fname="denoising_grid_all_levels.png")
+                         fname="denoising_grid_all_levels.png",
+                         threshold=threshold)
     
     # Save comprehensive report
     report = {
