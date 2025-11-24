@@ -146,8 +146,7 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
     plot_generation_results(
         X_new, nearest_char, char_idx1, char_idx2, X,
         f"Resultados de Generación (α={alpha})",
-        f"outputs/{output_prefix}_comparison.png",
-        threshold=threshold
+        f"outputs/{output_prefix}_comparison.png"
     )
     
     # Paso 6: Graficar espacio latente con punto generado resaltado (muestra dónde está en el espacio)
