@@ -190,8 +190,8 @@ def run():
     vae = train_vae_simple(
         X, 
         latent_dim=2,
-        epochs=200,
-        beta=1.0,
+        epochs=1000,
+        beta=0.1,
         batch_size=4,
         lr=0.001,
         seed=42
@@ -221,7 +221,7 @@ def run():
         },
         "training": {
             "epochs": 200,
-            "beta": 1.0,
+            "beta": 0.1,
             "final_reconstruction_loss": vae.history["reconstruction_loss"][-1],
             "final_kl_loss": vae.history["kl_loss"][-1],
             "final_total_loss": vae.history["total_loss"][-1]

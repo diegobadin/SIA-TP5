@@ -1,10 +1,11 @@
 import sys
-from exercises import ej1, ej1b_denoising, ej2_vae
+from exercises import ej1, ej1b_denoising, ej2_vae, ej2_experiments
 
 EXPERIMENTS = {
     "ex1": ej1.run,
     "denoising": ej1b_denoising.run,
-    "vae": ej2_vae.run
+    "vae": ej2_vae.run,
+    "vae_experiment": ej2_experiments.run_experiments()
 }
 
 
@@ -13,6 +14,7 @@ Usage:
   python main.py ex1 <latent_dim?> <epochs?> <noise_level?> <deep?> <batch_size?> <lr?> <scale?>
   python main.py denoising
   python main.py vae
+  python main.py vae_experiment
 """
 
 def run_experiment(name: str, *args):

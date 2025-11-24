@@ -14,7 +14,7 @@ import numpy as np
 import copy
 
 from src.mlp.mlp import MLP
-from src.mlp.activations import Activation, TANH, SIGMOID
+from src.mlp.activations import Activation, TANH, SIGMOID, IDENTITY
 from src.mlp.erorrs import Loss, MSELoss
 from src.mlp.optimizers import Optimizer, Adam, SGD, Momentum
 
@@ -140,7 +140,7 @@ class VariationalEncoder:
         
         self.mu_head = MLP(
             layer_sizes=[hidden_dim, latent_dim],
-            activations=[TANH],  # Linear output (no activation on mu)
+            activations=[IDENTITY], # IDENTITY: linear output for μ, regularization is handled by the KL term
             loss=loss,
             optimizer=optimizer_mu,
             w_init_scale=w_init_scale,
@@ -149,7 +149,7 @@ class VariationalEncoder:
         
         self.log_var_head = MLP(
             layer_sizes=[hidden_dim, latent_dim],
-            activations=[TANH],  # Linear output (no activation on log_var)
+            activations=[IDENTITY], # IDENTITY: linear output for log σ²
             loss=loss,
             optimizer=optimizer_log_var,
             w_init_scale=w_init_scale,

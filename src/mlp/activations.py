@@ -15,6 +15,9 @@ def _tanh(z): return np.tanh(z)
 def _dtanh(z, a): return 1.0 - a**2
 def _relu(z): return np.maximum(0.0, z)
 def _drelu(z, a): return (z > 0.0).astype(float)
+def _identity(z): return z
+def _didentity(z, a): return np.ones_like(z)
+
 
 def _softmax(z):
     z = z - np.max(z)
@@ -24,5 +27,6 @@ def _softmax(z):
 SIGMOID = Activation(_sigmoid, _dsigmoid, "sigmoid")
 TANH    = Activation(_tanh, _dtanh, "tanh")
 RELU    = Activation(_relu, _drelu, "relu")
+IDENTITY = Activation(_identity, _didentity, "identity")
 # Softmax: la derivada elemental no se usa; se maneja en la loss (CE)
 SOFTMAX = Activation(_softmax, lambda z, a: np.ones_like(z), "softmax")
