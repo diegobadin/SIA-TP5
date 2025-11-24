@@ -26,37 +26,21 @@ def parse_emoji_txt(path: str = "data/emojis.txt", scale: str = "01") -> Tuple[n
     data = Path(path).read_text(encoding="utf-8", errors="ignore")
     
     # Split by blank lines to separate emojis
-    # Each emoji starts with a comment line "# Emoji N: Name" followed by ASCII art
     emoji_blocks = []
     current_block = []
-    in_emoji = False
     
     for line in data.split('\n'):
         stripped = line.strip()
-        
-        # Check if this is an emoji header comment
-        if stripped.startswith('# Emoji'):
-            # Save previous block if exists
-            if current_block:
-                emoji_blocks.append(current_block)
-            current_block = []
-            in_emoji = True
-            continue
-        
-        # Skip other comments and empty lines (but collect data lines)
-        if stripped.startswith('#') and not in_emoji:
-            continue
         
         if not stripped:
             # Empty line - if we have a block, it's complete
             if current_block:
                 emoji_blocks.append(current_block)
                 current_block = []
-                in_emoji = False
             continue
         
-        # Collect data lines (ASCII art)
-        if in_emoji and not stripped.startswith('#'):
+        # Collect data lines (ASCII art - only lines with '#' and '.')
+        if all(c in '#.' for c in stripped):
             current_block.append(stripped)
     
     # Add last block if exists

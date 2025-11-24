@@ -134,6 +134,80 @@ def plot_generated_samples(vae, X_train, n_generated=16, img_shape=(16, 16), fna
     plt.close()
 
 
+def plot_all_dataset_emojis(vae, X_train, labels, img_shape=(16, 16), fname=None):
+    """
+    Plot all emojis from the dataset with their VAE reconstructions.
+    
+    Args:
+        vae: Trained VAE
+        X_train: Training samples (all emojis)
+        labels: Data labels
+        img_shape: Image shape (height, width)
+        fname: Output filename
+    """
+    # Get reconstructions for all training samples
+    # forward() returns (x_recon, mu, log_var, z)
+    X_recon, _, _, _ = vae.forward(X_train)
+    
+    # Determine grid layout: 8 columns × 4 rows (16 emojis total)
+    # Row 1: Original emojis 0-7
+    # Row 2: Original emojis 8-15
+    # Row 3: Reconstructed emojis 0-7
+    # Row 4: Reconstructed emojis 8-15
+    n_emojis = len(X_train)
+    n_cols = 8
+    n_rows = 4
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 8))
+    
+    # Handle case where axes might be 1D
+    if n_rows == 1:
+        axes = axes.reshape(1, -1)
+    if n_cols == 1:
+        axes = axes.reshape(-1, 1)
+    
+    # Row 1: Original emojis 0-7
+    for i in range(n_cols):
+        if i < n_emojis:
+            axes[0, i].imshow(X_train[i].reshape(img_shape), cmap="gray_r")
+            axes[0, i].set_title(f"Emoji {i}", fontsize=8)
+        axes[0, i].axis("off")
+    
+    # Row 2: Original emojis 8-15
+    for i in range(n_cols):
+        emoji_idx = i + n_cols
+        if emoji_idx < n_emojis:
+            axes[1, i].imshow(X_train[emoji_idx].reshape(img_shape), cmap="gray_r")
+            axes[1, i].set_title(f"Emoji {emoji_idx}", fontsize=8)
+        axes[1, i].axis("off")
+    
+    # Row 3: Reconstructed emojis 0-7
+    for i in range(n_cols):
+        if i < n_emojis:
+            axes[2, i].imshow(X_recon[i].reshape(img_shape), cmap="gray_r")
+        axes[2, i].axis("off")
+    
+    # Row 4: Reconstructed emojis 8-15
+    for i in range(n_cols):
+        emoji_idx = i + n_cols
+        if emoji_idx < n_emojis:
+            axes[3, i].imshow(X_recon[emoji_idx].reshape(img_shape), cmap="gray_r")
+        axes[3, i].axis("off")
+    
+    # Add row labels
+    fig.text(0.02, 0.875, "Original", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.625, "Original", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.375, "Reconstructed", rotation=90, fontsize=12, va='center', ha='center')
+    fig.text(0.02, 0.125, "Reconstructed", rotation=90, fontsize=12, va='center', ha='center')
+    
+    plt.suptitle("All Dataset Emojis: Original (rows 1-2) vs VAE Reconstruction (rows 3-4)", fontsize=14)
+    plt.tight_layout(rect=[0.03, 0, 1, 1])  # Leave space for row labels
+    if fname:
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/{fname}", dpi=140)
+    plt.close()
+
+
 def train_vae_simple(X, latent_dim=2, epochs=200, beta=1.0, 
                     batch_size=4, lr=0.001, seed=42):
     """
@@ -191,7 +265,7 @@ def run():
         X, 
         latent_dim=2,
         epochs=1000,
-        beta=0.1,
+        beta=1,
         batch_size=4,
         lr=0.001,
         seed=42
@@ -205,13 +279,18 @@ def run():
     print("\n4. Visualizing latent space...")
     visualize_latent_space(vae, X, labels, "vae_latent_space.png")
     
+    # Show all dataset emojis with reconstructions
+    print("\n5. Plotting all dataset emojis with reconstructions...")
+    plot_all_dataset_emojis(vae, X, labels, img_shape=img_shape, 
+                            fname="vae_all_emojis_reconstruction.png")
+    
     # Generate new samples
-    print("\n5. Generating new samples...")
+    print("\n6. Generating new samples...")
     plot_generated_samples(vae, X, n_generated=16, img_shape=img_shape, 
                           fname="vae_generated_samples.png")
     
     # Save report
-    print("\n6. Saving results...")
+    print("\n7. Saving results...")
     report = {
         "architecture": {
             "input_dim": vae.input_dim,
