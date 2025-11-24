@@ -11,11 +11,12 @@ This module implements a VAE with:
 from __future__ import annotations
 from typing import List, Sequence, Optional, Tuple
 import numpy as np
+import copy
 
 from src.mlp.mlp import MLP
 from src.mlp.activations import Activation, TANH, SIGMOID
 from src.mlp.erorrs import Loss, MSELoss
-from src.mlp.optimizers import Optimizer
+from src.mlp.optimizers import Optimizer, Adam, SGD, Momentum
 
 
 def reparameterize(mu: np.ndarray, log_var: np.ndarray, 
@@ -63,6 +64,28 @@ def kl_divergence_loss(mu: np.ndarray, log_var: np.ndarray) -> float:
     return float(np.mean(kl))
 
 
+def _clone_optimizer(optimizer: Optimizer) -> Optimizer:
+    """
+    Create a new optimizer instance with the same parameters.
+    
+    Args:
+        optimizer: Original optimizer instance
+        
+    Returns:
+        New optimizer instance with same parameters
+    """
+    if isinstance(optimizer, Adam):
+        return Adam(lr=optimizer.lr, beta1=optimizer.b1, beta2=optimizer.b2, eps=optimizer.eps)
+    elif isinstance(optimizer, SGD):
+        return SGD(lr=optimizer.lr)
+    elif isinstance(optimizer, Momentum):
+        return Momentum(lr=optimizer.lr, beta=optimizer.beta)
+    else:
+        # Fallback: try to create with same parameters
+        # This handles custom optimizers
+        return copy.deepcopy(optimizer)
+
+
 class VariationalEncoder:
     """
     Variational encoder that outputs distribution parameters (μ, log_var).
@@ -98,11 +121,16 @@ class VariationalEncoder:
                 # If fewer activations, pad with TANH
                 base_acts = list(activations) + [TANH] * (len(hidden_layers) - len(activations))
         
+        # Create separate optimizer instances for each MLP to avoid shape conflicts
+        optimizer_base = _clone_optimizer(optimizer)
+        optimizer_mu = _clone_optimizer(optimizer)
+        optimizer_log_var = _clone_optimizer(optimizer)
+        
         self.base_mlp = MLP(
             layer_sizes=base_sizes,
             activations=base_acts,
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_base,
             w_init_scale=w_init_scale,
             seed=seed
         )
@@ -114,7 +142,7 @@ class VariationalEncoder:
             layer_sizes=[hidden_dim, latent_dim],
             activations=[TANH],  # Linear output (no activation on mu)
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_mu,
             w_init_scale=w_init_scale,
             seed=seed
         )
@@ -123,7 +151,7 @@ class VariationalEncoder:
             layer_sizes=[hidden_dim, latent_dim],
             activations=[TANH],  # Linear output (no activation on log_var)
             loss=loss,
-            optimizer=optimizer,
+            optimizer=optimizer_log_var,
             w_init_scale=w_init_scale,
             seed=seed
         )
@@ -441,14 +469,14 @@ class VAE:
             # We'll treat delta_mu_total as if it's the gradient at output
             # and backpropagate through mu_head layers
             delta_h_mu = self._backprop_through_mlp_to_input(
-                self.encoder.mu_head.mlp, h, delta_mu_total
+                self.encoder.mu_head, h, delta_mu_total
             )
         else:
             # Batch: handle each sample
             delta_h_mu_list = []
             for i in range(len(h)):
                 delta_h_mu_i = self._backprop_through_mlp_to_input(
-                    self.encoder.mu_head.mlp, h[i], delta_mu_total[i]
+                    self.encoder.mu_head, h[i], delta_mu_total[i]
                 )
                 delta_h_mu_list.append(delta_h_mu_i)
             delta_h_mu = np.array(delta_h_mu_list)
@@ -456,13 +484,13 @@ class VAE:
         # Backprop through log_var_head to get gradient w.r.t. h from log_var
         if h.ndim == 1:
             delta_h_log_var = self._backprop_through_mlp_to_input(
-                self.encoder.log_var_head.mlp, h, delta_log_var_total
+                self.encoder.log_var_head, h, delta_log_var_total
             )
         else:
             delta_h_log_var_list = []
             for i in range(len(h)):
                 delta_h_log_var_i = self._backprop_through_mlp_to_input(
-                    self.encoder.log_var_head.mlp, h[i], delta_log_var_total[i]
+                    self.encoder.log_var_head, h[i], delta_log_var_total[i]
                 )
                 delta_h_log_var_list.append(delta_h_log_var_i)
             delta_h_log_var = np.array(delta_h_log_var_list)
@@ -474,19 +502,19 @@ class VAE:
         if h.ndim == 1:
             # For single sample, we need to update mu_head
             # Use a simplified update: treat delta_mu_total as target gradient
-            self._update_mlp_with_gradient(self.encoder.mu_head.mlp, h, delta_mu_total)
+            self._update_mlp_with_gradient(self.encoder.mu_head, h, delta_mu_total)
         else:
             # Batch update for mu_head
             for i in range(len(h)):
-                self._update_mlp_with_gradient(self.encoder.mu_head.mlp, h[i], delta_mu_total[i])
+                self._update_mlp_with_gradient(self.encoder.mu_head, h[i], delta_mu_total[i])
         
         # Update log_var_head weights
         if h.ndim == 1:
-            self._update_mlp_with_gradient(self.encoder.log_var_head.mlp, h, delta_log_var_total)
+            self._update_mlp_with_gradient(self.encoder.log_var_head, h, delta_log_var_total)
         else:
             # Batch update for log_var_head
             for i in range(len(h)):
-                self._update_mlp_with_gradient(self.encoder.log_var_head.mlp, h[i], delta_log_var_total[i])
+                self._update_mlp_with_gradient(self.encoder.log_var_head, h[i], delta_log_var_total[i])
         
         # Update base_mlp weights
         if x.ndim == 1:
