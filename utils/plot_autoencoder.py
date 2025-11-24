@@ -532,9 +532,9 @@ def plot_generation_results(generated_char, nearest_neighbor_char, char_idx1, ch
         fname: Output filename (optional)
         shape: Shape to reshape characters for display
     """
-    gen_plot = _apply_threshold(generated_char)
-    nn_plot = _apply_threshold(nearest_neighbor_char)
-    X_plot = _apply_threshold(X_train)
+    gen_plot = generated_char
+    nn_plot = nearest_neighbor_char
+    X_plot = X_train
     fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     
     # Original character 1
