@@ -50,13 +50,15 @@ EXPERIMENT_CONFIGS = [
     }
 ]
 
-def plot_reconstructions(vae, X, n_samples=8, img_shape=(16, 16), fname=None):
+def plot_reconstructions(vae, X, n_samples=None, img_shape=(16, 16), fname=None):
     """
-    Muestra originales vs reconstrucciones para un subconjunto de X.
+    Muestra originales vs reconstrucciones.
     Fila de arriba: originales, fila de abajo: reconstrucciones.
+    Si n_samples es None, se usan todas las muestras de entrenamiento.
     """
-    # Elegimos algunas muestras
-    n_samples = min(n_samples, len(X))
+    # Elegimos todas las muestras por defecto
+    if n_samples is None or n_samples > len(X):
+        n_samples = len(X)
     X_subset = X[:n_samples]
 
     X_recon, _, _, _ = vae.forward(X_subset)
@@ -173,7 +175,7 @@ def run_experiments():
 
         # 3) Originales vs reconstrucciones
         plot_reconstructions(
-            vae, X, n_samples=8, img_shape=img_shape,
+            vae, X, n_samples=None, img_shape=img_shape,
             fname=f"{base_fname}_recon.png"
         )
 
