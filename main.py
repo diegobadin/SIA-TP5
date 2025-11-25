@@ -5,7 +5,7 @@ EXPERIMENTS = {
     "ex1": ej1.run,
     "denoising": ej1b_denoising.run,
     "vae": ej2_vae.run,
-    "vae_experiment": ej2_experiments.run_experiments()
+    "vae_experiment": ej2_experiments.run_experiments  # No parentheses - store function reference
 }
 
 
@@ -50,6 +50,8 @@ def main():
         run_experiment("denoising")
     elif experiment_name == "vae":
         run_experiment("vae")
+    elif experiment_name == "vae_experiment":
+        run_experiment("vae_experiment")
     else:
         print(f"Experiment '{experiment_name}' not recognized.")
         print(f"Available experiments: {list(EXPERIMENTS.keys())}")
