@@ -81,6 +81,64 @@ def plot_reconstructions(vae, X, n_samples=None, img_shape=(16, 16), fname=None)
         plt.savefig(f"outputs/{fname}", dpi=140)
     plt.close()
 
+
+def plot_latent_grid(vae, grid_size=10, z_range=(-3, 3), img_shape=(16, 16), threshold=None, fname=None):
+    """
+    Sample a uniform grid across 2D latent space and decode all points.
+    Shows the full generative manifold of the VAE.
+    
+    Args:
+        vae: Trained VAE (must have latent_dim >= 2)
+        grid_size: Number of points per dimension
+        z_range: Range for latent coordinates (min, max)
+        img_shape: Image shape for visualization
+        threshold: If set (e.g., 0.5), binarize output to match original emoji format
+        fname: Output filename
+    """
+    if vae.latent_dim < 2:
+        print("Latent grid requires latent_dim >= 2")
+        return
+    
+    # Create grid
+    z1 = np.linspace(z_range[0], z_range[1], grid_size)
+    z2 = np.linspace(z_range[0], z_range[1], grid_size)
+    
+    fig, axes = plt.subplots(grid_size, grid_size, figsize=(grid_size * 1.2, grid_size * 1.2))
+    
+    for i, z2_val in enumerate(reversed(z2)):  # Reverse so top-left is (-3, 3)
+        for j, z1_val in enumerate(z1):
+            # Create latent vector (fill extra dims with 0 if latent_dim > 2)
+            z = np.zeros(vae.latent_dim)
+            z[0] = z1_val
+            z[1] = z2_val
+            
+            # Decode
+            decoded = vae.decoder.decode(z)
+            
+            # Apply threshold if specified
+            if threshold is not None:
+                decoded = (decoded > threshold).astype(float)
+            
+            # Plot
+            axes[i, j].imshow(decoded.reshape(img_shape), cmap="gray_r")
+            axes[i, j].axis("off")
+    
+    # Add axis labels
+    fig.text(0.5, 0.02, f"z₀ ({z_range[0]} → {z_range[1]})", ha='center', fontsize=12)
+    fig.text(0.02, 0.5, f"z₁ ({z_range[1]} → {z_range[0]})", va='center', rotation='vertical', fontsize=12)
+    
+    title = "Latent Space Grid (Generative Manifold)"
+    if threshold is not None:
+        title += f" [threshold={threshold}]"
+    plt.suptitle(title, fontsize=14)
+    plt.tight_layout(rect=[0.03, 0.03, 1, 0.97])
+    
+    if fname:
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/{fname}", dpi=140)
+    plt.close()
+
+
 def train_vae_for_config(X, config):
     """
     Construye y entrena un VAE según la configuración dada.
@@ -184,6 +242,13 @@ def run_experiments():
             vae, X, n_generated=16, img_shape=img_shape,
             fname=f"{base_fname}_generated.png"
         )
+        
+        # 5) Latent grid (only for 2D latent space)
+        if vae.latent_dim == 2:
+            plot_latent_grid(
+                vae, grid_size=10, z_range=(-3, 3), img_shape=img_shape,
+                threshold=0.5, fname=f"{base_fname}_latent_grid.png"
+            )
 
         # Guardar resultados numéricos
         result = {
