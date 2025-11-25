@@ -349,8 +349,15 @@ class VAE:
                 epoch_kl_loss.append(kl_loss_val)
                 epoch_total_loss.append(total_loss)
                 
-                # Perform proper backpropagation step
-                self._train_step(x_batch)
+                # Perform proper backpropagation step using same forward values
+                self._train_step(
+                    x_batch,
+                    mu=mu,
+                    log_var=log_var,
+                    epsilon=epsilon,
+                    z=z,
+                    x_recon=x_recon,
+                )
             
             # Record epoch averages
             self.history["reconstruction_loss"].append(np.mean(epoch_recon_loss))
@@ -589,15 +596,18 @@ class VAE:
         # This method is kept for compatibility but will be replaced by _backprop_encoder
         pass  # Encoder update handled in _train_step
     
-    def _train_step(self, x_batch: np.ndarray):
+    def _train_step(self, x_batch: np.ndarray, 
+                    mu, 
+                    log_var ,
+                    epsilon, 
+                    z , 
+                    x_recon):
         """
         Single VAE training step with proper backpropagation.
+        
+        Optional cached forward values (mu, log_var, epsilon, z, x_recon)
+        can be supplied to avoid redundant computation.
         """
-        # Forward pass
-        mu, log_var = self.encoder.encode(x_batch)
-        epsilon = self.rng.normal(0, 1, size=mu.shape)  # Store for gradient computation
-        z = reparameterize(mu, log_var, epsilon=epsilon, rng=self.rng)
-        x_recon = self.decoder.decode(z)
         
         # 1. Backprop through decoder to get ∂L_recon/∂z
         delta_z = self._backprop_decoder(x_batch, z, x_recon)
