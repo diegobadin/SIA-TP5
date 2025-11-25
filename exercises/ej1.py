@@ -188,14 +188,14 @@ def demonstrate_generation(ae, X, labels, char_idx1, char_idx2, alpha=0.5,
 
 def run(latent_dim=2, noise_level=0.0):
     """
-    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Arquitectura_Ancha_Rapida.
+    Entrena un autoencoder sobre los caracteres 7x5 de font.h usando la configuración Inicializacion_Grande.
     
-    Configuración fija: Arquitectura_Ancha_Rapida
-    - Arquitectura: 35 → [30, 15] → 2 → [15, 30] → 35
+    Configuración fija: Inicializacion_Grande
+    - Arquitectura: 35 → [20, 10] → 2 → [10, 20] → 35
     - Activaciones: TANH en encoder y capas ocultas, SIGMOID en salida
     - Optimizador: Adam(lr=0.001)
     - Batch size: 1
-    - W init scale: 0.1
+    - W init scale: 0.2
     - Scale: "01" (datos en [0, 1])
     - Early stopping: max_pixel_error=1.0
 
@@ -203,15 +203,15 @@ def run(latent_dim=2, noise_level=0.0):
       latent_dim : tamaño del espacio latente (default: 2)
       noise_level: >0 para denoising (agrega ruido gaussiano a la entrada)
     """
-    # Configuración Arquitectura_Ancha_Rapida
+    # Configuración Inicializacion_Grande
     scale = "01" 
-    encoder_hidden = [30, 15]
-    decoder_hidden = [15, 30]
+    encoder_hidden = [20, 10]
+    decoder_hidden = [10, 20]
     encoder_activations = [TANH, TANH, TANH]
     decoder_activations = [TANH, TANH, SIGMOID]
     lr = 0.001
     batch_size = 1
-    w_init_scale = 0.1
+    w_init_scale = 0.2
     max_epochs = 10000
     max_pixel_error = 1.0
     
@@ -291,39 +291,39 @@ def run(latent_dim=2, noise_level=0.0):
             24: 'x', 25: 'y', 26: 'z', 27: '{', 28: '|', 29: '}', 30: '~', 31: 'DEL'
         }
         
-        # Pares seleccionados basados en análisis del espacio latente de Arquitectura_Ancha_Rapida:
+        # Pares seleccionados basados en análisis del espacio latente de Inicializacion_Grande:
         # Estos pares fueron elegidos para demostrar diferentes aspectos de la generación:
-        # Basados en la visualización del espacio latente donde se observa:
-        # - Concentración de caracteres en la parte superior (z2 alto)
-        # - Caracteres en la esquina inferior derecha (z1 alto, z2 bajo)
-        # - Caracteres en la esquina inferior izquierda (z1 bajo, z2 bajo)
+        # Basados en el análisis del espacio latente donde se observan diferentes distancias
+        # y características visuales que permiten explorar el espacio de manera efectiva.
         char_pairs = [
-            (16, 11),  # 'p' → 'k' - Transición suave entre letras similares (distancia ~0.15)
-                      # Justificación: Ambos caracteres están en la parte superior del espacio latente,
-                      # muy cercanos entre sí. Esta proximidad permite ver cómo el autoencoder genera
-                      # variaciones sutiles entre caracteres vecinos, mostrando transiciones suaves
-                      # y naturales en el espacio latente.
+            (5, 15),   # 'e' → 'o' - Transición suave entre letras similares (distancia ~0.15)
+                      # Justificación: Ambas letras tienen curvas redondas y están muy cercanas
+                      # en el espacio latente (distancia 0.15). Esta proximidad permite ver cómo
+                      # el autoencoder genera variaciones sutiles entre caracteres visualmente
+                      # similares, mostrando transiciones suaves y naturales que preservan las
+                      # características de redondez.
             
-            (15, 13),  # 'o' → 'm' - Ambas con curvas (distancia ~0.53)
-                      # Justificación: Ambas letras comparten características visuales (curvas redondas)
-                      # pero están en diferentes regiones del espacio latente. La interpolación explora
-                      # cómo se transforman estas características visuales mientras se mueve entre
-                      # regiones, manteniendo cierta coherencia estructural.
+            (2, 16),   # 'b' → 'p' - Ambas con palo vertical (distancia ~0.33)
+                      # Justificación: Ambas letras comparten una característica estructural importante:
+                      # un palo vertical. Aunque están a una distancia intermedia (0.33), la interpolación
+                      # muestra cómo el modelo puede transformar entre letras que comparten elementos
+                      # estructurales similares, generando caracteres intermedios que mantienen el
+                      # palo vertical pero varían en otras características.
             
-            (1, 4),    # 'a' → 'd' - Esquinas opuestas (distancia ~1.06)
-                      # Justificación: Caracteres diferentes ubicados en esquinas opuestas del espacio
-                      # latente. 'a' está en la esquina inferior derecha y 'd' en la esquina inferior
-                      # izquierda. Esta distancia permite explorar cómo el modelo generaliza entre
-                      # regiones distantes, generando caracteres nuevos que no están en el conjunto
-                      # de entrenamiento, manteniendo una transición visualmente coherente.
+            (1, 18),   # 'a' → 'r' - Exploración del espacio (distancia ~1.50)
+                      # Justificación: Caracteres ubicados en regiones muy diferentes del espacio latente.
+                      # 'a' está en la esquina inferior izquierda y 'r' en la parte superior derecha.
+                      # Esta gran distancia (1.50) permite explorar los límites del espacio latente y
+                      # muestra cómo el modelo generaliza entre regiones muy distantes, generando
+                      # caracteres completamente nuevos que no están en el conjunto de entrenamiento,
+                      # demostrando la capacidad de generalización del autoencoder.
             
-            (5, 21),   # 'e' → 'u' - Cruce vertical (distancia ~1.00)
-                      # Justificación: Ambas letras tienen curvas pero están en regiones opuestas
-                      # verticalmente del espacio latente. 'e' está en la parte superior-derecha
-                      # y 'u' en la parte inferior-derecha. La interpolación cruza verticalmente
-                      # el espacio, mostrando cómo el modelo transforma caracteres con características
-                      # visuales similares (curvas) mientras se mueve entre regiones diferentes,
-                      # generando transiciones interesantes y coherentes.
+            (3, 5),    # 'c' → 'e' - Ambas con curvas (distancia ~0.36)
+                      # Justificación: Ambas letras tienen curvas pero están a una distancia intermedia
+                      # (0.36). La interpolación entre ellas muestra cómo el modelo puede crear
+                      # transiciones graduales entre caracteres con características visuales similares
+                      # (curvas), generando variaciones interesantes que mantienen la coherencia
+                      # estructural mientras exploran el espacio entre ambos caracteres.
         ]
         
         # Obtener representaciones latentes para calcular distancias
@@ -378,12 +378,12 @@ def run(latent_dim=2, noise_level=0.0):
 
 if __name__ == "__main__":
     """
-    Ejecuta el ejercicio 1 con la configuración Arquitectura_Ancha_Rapida (fija).
+    Ejecuta el ejercicio 1 con la configuración Inicializacion_Grande (fija).
     Esta configuración usa scale="01" (datos en [0, 1]) con SIGMOID en la salida.
     """
     print("\n" + "="*80)
     print("EJERCICIO 1: Autoencoder para caracteres 7x5")
-    print("Configuración: Arquitectura_Ancha_Rapida (fija)")
+    print("Configuración: Inicializacion_Grande (fija)")
     print("="*80 + "\n")
     
     # Ejecutar con la configuración Arquitectura_Ancha_Rapida (siempre se usa esta configuración)
